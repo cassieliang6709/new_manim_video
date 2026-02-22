@@ -1,0 +1,401 @@
+[
+  {
+    "name": "Scene",
+    "category": "scene",
+    "signature": "class MyScene(Scene):",
+    "note": "Base class for all 2D animations. Implement construct(self) with animation logic.",
+    "example": "class MyScene(Scene):\n    def construct(self):\n        self.play(Create(Circle()))"
+  },
+  {
+    "name": "ThreeDScene",
+    "category": "scene",
+    "signature": "class MyScene(ThreeDScene):",
+    "note": "Base class for 3D animations. Supports camera rotation via self.set_camera_orientation().",
+    "example": "class MyScene(ThreeDScene):\n    def construct(self):\n        self.set_camera_orientation(phi=75*DEGREES, theta=-45*DEGREES)"
+  },
+  {
+    "name": "MovingCameraScene",
+    "category": "scene",
+    "signature": "class MyScene(MovingCameraScene):",
+    "note": "Scene whose camera can be panned/zoomed. Use self.camera.frame to move the viewport.",
+    "example": "self.play(self.camera.frame.animate.move_to(circle))"
+  },
+  {
+    "name": "Create",
+    "category": "animation",
+    "signature": "Create(mobject, run_time=1, **kwargs)",
+    "note": "Draws the border/stroke of a shape. Use for geometric shapes like Circle, Square, Line.",
+    "example": "self.play(Create(Circle()))"
+  },
+  {
+    "name": "Write",
+    "category": "animation",
+    "signature": "Write(mobject, run_time=1, **kwargs)",
+    "note": "Animates writing a Text or VMobject stroke by stroke. Use for Text objects.",
+    "example": "self.play(Write(Text('Hello')))"
+  },
+  {
+    "name": "FadeIn",
+    "category": "animation",
+    "signature": "FadeIn(mobject, shift=None, scale=1, **kwargs)",
+    "note": "Fades the mobject in from transparent. Optional shift direction (e.g. UP) for slide-in effect.",
+    "example": "self.play(FadeIn(square, shift=UP))"
+  },
+  {
+    "name": "FadeOut",
+    "category": "animation",
+    "signature": "FadeOut(mobject, shift=None, **kwargs)",
+    "note": "Fades the mobject out to transparent. Use to remove elements cleanly.",
+    "example": "self.play(FadeOut(square))"
+  },
+  {
+    "name": "Transform",
+    "category": "animation",
+    "signature": "Transform(mobject, target_mobject, **kwargs)",
+    "note": "Morphs mobject into target_mobject in-place. The original mobject becomes the target.",
+    "example": "self.play(Transform(circle, square))"
+  },
+  {
+    "name": "ReplacementTransform",
+    "category": "animation",
+    "signature": "ReplacementTransform(mobject, target_mobject, **kwargs)",
+    "note": "Like Transform but replaces mobject with target in the scene. Cleaner than Transform for most use cases.",
+    "example": "self.play(ReplacementTransform(circle, square))"
+  },
+  {
+    "name": "GrowFromCenter",
+    "category": "animation",
+    "signature": "GrowFromCenter(mobject, **kwargs)",
+    "note": "Scales the mobject from zero size growing outward from its center.",
+    "example": "self.play(GrowFromCenter(Circle()))"
+  },
+  {
+    "name": "DrawBorderThenFill",
+    "category": "animation",
+    "signature": "DrawBorderThenFill(mobject, **kwargs)",
+    "note": "First draws the border, then fills the interior. Good for filled shapes.",
+    "example": "self.play(DrawBorderThenFill(Square(fill_color=BLUE, fill_opacity=1)))"
+  },
+  {
+    "name": "Indicate",
+    "category": "animation",
+    "signature": "Indicate(mobject, color=YELLOW, scale_factor=1.2, **kwargs)",
+    "note": "Briefly highlights a mobject by scaling and flashing it. Good for pointing attention.",
+    "example": "self.play(Indicate(label))"
+  },
+  {
+    "name": "Flash",
+    "category": "animation",
+    "signature": "Flash(point, color=YELLOW, flash_radius=0.3, **kwargs)",
+    "note": "Emits a flash of lines from a point. Use for highlighting a location.",
+    "example": "self.play(Flash(dot.get_center(), color=YELLOW))"
+  },
+  {
+    "name": "Circumscribe",
+    "category": "animation",
+    "signature": "Circumscribe(mobject, shape=Rectangle, color=YELLOW, **kwargs)",
+    "note": "Draws a shape around a mobject briefly to highlight it.",
+    "example": "self.play(Circumscribe(text))"
+  },
+  {
+    "name": "AnimationGroup",
+    "category": "animation",
+    "signature": "AnimationGroup(*animations, lag_ratio=0, **kwargs)",
+    "note": "Plays multiple animations simultaneously (lag_ratio=0) or staggered (lag_ratio>0).",
+    "example": "self.play(AnimationGroup(FadeIn(a), FadeIn(b), lag_ratio=0.3))"
+  },
+  {
+    "name": "LaggedStart",
+    "category": "animation",
+    "signature": "LaggedStart(*animations, lag_ratio=0.2, **kwargs)",
+    "note": "Plays animations with a stagger delay between each. Default lag_ratio=0.2.",
+    "example": "self.play(LaggedStart(FadeIn(a), FadeIn(b), FadeIn(c), lag_ratio=0.3))"
+  },
+  {
+    "name": "Succession",
+    "category": "animation",
+    "signature": "Succession(*animations, **kwargs)",
+    "note": "Plays animations one after another (fully sequential). Each starts when the previous ends.",
+    "example": "self.play(Succession(FadeIn(a), FadeIn(b)))"
+  },
+  {
+    "name": "MoveToTarget",
+    "category": "animation",
+    "signature": "MoveToTarget(mobject, **kwargs)",
+    "note": "Moves mobject to its .target copy. Set target via mobject.generate_target() then modify mobject.target.",
+    "example": "dot.generate_target()\ndot.target.move_to(RIGHT*2)\nself.play(MoveToTarget(dot))"
+  },
+  {
+    "name": "Circle",
+    "category": "mobject",
+    "signature": "Circle(radius=1, color=WHITE, fill_opacity=0, **kwargs)",
+    "note": "A circle shape. Use fill_opacity=1 for a filled circle.",
+    "example": "Circle(radius=0.5, color=BLUE, fill_opacity=1)"
+  },
+  {
+    "name": "Square",
+    "category": "mobject",
+    "signature": "Square(side_length=2, color=WHITE, fill_opacity=0, **kwargs)",
+    "note": "A square shape.",
+    "example": "Square(side_length=1, color=RED, fill_opacity=0.5)"
+  },
+  {
+    "name": "Rectangle",
+    "category": "mobject",
+    "signature": "Rectangle(width=4, height=2, color=WHITE, fill_opacity=0, **kwargs)",
+    "note": "A rectangle. Specify width and height explicitly.",
+    "example": "Rectangle(width=3, height=1, color=GREEN, fill_opacity=1)"
+  },
+  {
+    "name": "Triangle",
+    "category": "mobject",
+    "signature": "Triangle(color=WHITE, fill_opacity=0, **kwargs)",
+    "note": "An equilateral triangle pointing up.",
+    "example": "Triangle(color=YELLOW, fill_opacity=1)"
+  },
+  {
+    "name": "Polygon",
+    "category": "mobject",
+    "signature": "Polygon(*vertices, color=WHITE, **kwargs)",
+    "note": "A polygon defined by vertex coordinates. Vertices are numpy arrays.",
+    "example": "Polygon(LEFT, RIGHT, UP, color=BLUE)"
+  },
+  {
+    "name": "Arrow",
+    "category": "mobject",
+    "signature": "Arrow(start=LEFT, end=RIGHT, color=WHITE, **kwargs)",
+    "note": "An arrow from start to end. Use buff=0 to make it reach the exact points.",
+    "example": "Arrow(start=LEFT, end=RIGHT, color=YELLOW)"
+  },
+  {
+    "name": "DoubleArrow",
+    "category": "mobject",
+    "signature": "DoubleArrow(start=LEFT, end=RIGHT, color=WHITE, **kwargs)",
+    "note": "An arrow with heads on both ends.",
+    "example": "DoubleArrow(start=LEFT*2, end=RIGHT*2)"
+  },
+  {
+    "name": "Line",
+    "category": "mobject",
+    "signature": "Line(start=LEFT, end=RIGHT, color=WHITE, **kwargs)",
+    "note": "A straight line between two points.",
+    "example": "Line(start=UP, end=DOWN, color=WHITE)"
+  },
+  {
+    "name": "DashedLine",
+    "category": "mobject",
+    "signature": "DashedLine(start=LEFT, end=RIGHT, dash_length=0.1, **kwargs)",
+    "note": "A dashed straight line.",
+    "example": "DashedLine(LEFT*2, RIGHT*2, color=GRAY)"
+  },
+  {
+    "name": "Arc",
+    "category": "mobject",
+    "signature": "Arc(radius=1, start_angle=0, angle=PI/2, color=WHITE, **kwargs)",
+    "note": "A circular arc. angle is in radians. Use PI from manim imports.",
+    "example": "Arc(radius=1, start_angle=0, angle=PI, color=BLUE)"
+  },
+  {
+    "name": "Dot",
+    "category": "mobject",
+    "signature": "Dot(point=ORIGIN, radius=0.08, color=WHITE, **kwargs)",
+    "note": "A small filled circle, typically used as a point marker.",
+    "example": "Dot(point=RIGHT*2, color=RED)"
+  },
+  {
+    "name": "Text",
+    "category": "mobject",
+    "signature": "Text(text, font_size=48, color=WHITE, font='', **kwargs)",
+    "note": "Renders plain text using Pango. Does NOT require LaTeX. Use this instead of MathTex/Tex.",
+    "example": "Text('Hello World', font_size=36, color=BLUE)"
+  },
+  {
+    "name": "VGroup",
+    "category": "mobject",
+    "signature": "VGroup(*vmobjects)",
+    "note": "Groups multiple VMobjects so they can be transformed/moved/faded together.",
+    "example": "group = VGroup(circle, square)\nself.play(group.animate.shift(RIGHT))"
+  },
+  {
+    "name": "Group",
+    "category": "mobject",
+    "signature": "Group(*mobjects)",
+    "note": "Like VGroup but accepts any Mobject (not just VMobject). Use VGroup when possible.",
+    "example": "Group(circle, dot, label)"
+  },
+  {
+    "name": "Axes",
+    "category": "mobject",
+    "signature": "Axes(x_range=[-3,3,1], y_range=[-3,3,1], x_length=6, y_length=6, **kwargs)",
+    "note": "A 2D coordinate axes. Use get_graph() to plot functions on it.",
+    "example": "axes = Axes(x_range=[-3,3,1], y_range=[-2,2,1])\ngraph = axes.plot(lambda x: x**2, color=BLUE)\nself.play(Create(axes), Create(graph))"
+  },
+  {
+    "name": "NumberLine",
+    "category": "mobject",
+    "signature": "NumberLine(x_range=[-3,3,1], length=6, **kwargs)",
+    "note": "A single number line with tick marks.",
+    "example": "NumberLine(x_range=[-5,5,1], length=8)"
+  },
+  {
+    "name": "NumberPlane",
+    "category": "mobject",
+    "signature": "NumberPlane(x_range=[-3,3,1], y_range=[-3,3,1], **kwargs)",
+    "note": "A full grid with labeled axes. Background grid is shown by default.",
+    "example": "NumberPlane(x_range=[-4,4], y_range=[-3,3])"
+  },
+  {
+    "name": "Brace",
+    "category": "mobject",
+    "signature": "Brace(mobject, direction=DOWN, **kwargs)",
+    "note": "A curly brace under/over/beside a mobject. direction sets which side.",
+    "example": "brace = Brace(rectangle, direction=DOWN)\nlabel = brace.get_text('width')"
+  },
+  {
+    "name": "SurroundingRectangle",
+    "category": "mobject",
+    "signature": "SurroundingRectangle(mobject, color=YELLOW, buff=0.1, **kwargs)",
+    "note": "A rectangle that tightly surrounds a mobject, used for highlighting.",
+    "example": "SurroundingRectangle(text, color=YELLOW, buff=0.1)"
+  },
+  {
+    "name": "BulletedList",
+    "category": "mobject",
+    "signature": "BulletedList(*items, font_size=48, **kwargs)",
+    "note": "Creates a bulleted list from string items.",
+    "example": "BulletedList('Item 1', 'Item 2', 'Item 3', font_size=32)"
+  },
+  {
+    "name": "DecimalNumber",
+    "category": "mobject",
+    "signature": "DecimalNumber(number=0, num_decimal_places=2, **kwargs)",
+    "note": "Displays a number that can be updated with .set_value(n).",
+    "example": "num = DecimalNumber(0)\nself.play(ChangeDecimalToValue(num, 100))"
+  },
+  {
+    "name": "always_redraw",
+    "category": "utility",
+    "signature": "always_redraw(func)",
+    "note": "Returns a mobject that redraws itself every frame by calling func(). Used for dynamic labels.",
+    "example": "label = always_redraw(lambda: Text(f'x={dot.get_x():.1f}').next_to(dot, UP))"
+  },
+  {
+    "name": "ValueTracker",
+    "category": "utility",
+    "signature": "ValueTracker(value=0)",
+    "note": "Tracks a numerical value that can be animated. Use .get_value() and .animate.set_value().",
+    "example": "t = ValueTracker(0)\nself.play(t.animate.set_value(1), run_time=2)"
+  },
+  {
+    "name": "DEGREES",
+    "category": "constant",
+    "signature": "DEGREES  (= PI / 180)",
+    "note": "Conversion factor from degrees to radians. Multiply angle in degrees by DEGREES.",
+    "example": "Arc(angle=90*DEGREES)  # quarter circle"
+  },
+  {
+    "name": "PI",
+    "category": "constant",
+    "signature": "PI  (= 3.14159...)",
+    "note": "Mathematical constant pi. Available directly from manim import.",
+    "example": "Arc(angle=PI)  # half circle"
+  },
+  {
+    "name": "UP",
+    "category": "constant",
+    "signature": "UP  (= np.array([0, 1, 0]))",
+    "note": "Unit vector pointing up. Combine with scalars: UP * 2 means 2 units up.",
+    "example": "text.next_to(circle, UP)"
+  },
+  {
+    "name": "DOWN",
+    "category": "constant",
+    "signature": "DOWN  (= np.array([0, -1, 0]))",
+    "note": "Unit vector pointing down.",
+    "example": "label.next_to(axes, DOWN)"
+  },
+  {
+    "name": "LEFT",
+    "category": "constant",
+    "signature": "LEFT  (= np.array([-1, 0, 0]))",
+    "note": "Unit vector pointing left.",
+    "example": "square.shift(LEFT * 2)"
+  },
+  {
+    "name": "RIGHT",
+    "category": "constant",
+    "signature": "RIGHT  (= np.array([1, 0, 0]))",
+    "note": "Unit vector pointing right.",
+    "example": "arrow = Arrow(ORIGIN, RIGHT * 3)"
+  },
+  {
+    "name": "ORIGIN",
+    "category": "constant",
+    "signature": "ORIGIN  (= np.array([0, 0, 0]))",
+    "note": "The center of the scene.",
+    "example": "circle.move_to(ORIGIN)"
+  },
+  {
+    "name": "next_to",
+    "category": "method",
+    "signature": "mobject.next_to(other, direction=RIGHT, buff=0.25, **kwargs)",
+    "note": "Positions mobject next to another mobject in the given direction with a buffer gap.",
+    "example": "label.next_to(circle, UP, buff=0.3)"
+  },
+  {
+    "name": "move_to",
+    "category": "method",
+    "signature": "mobject.move_to(point_or_mobject, **kwargs)",
+    "note": "Moves mobject's center to the given point or to the center of another mobject.",
+    "example": "circle.move_to(RIGHT * 2 + UP)"
+  },
+  {
+    "name": "shift",
+    "category": "method",
+    "signature": "mobject.shift(*vectors)",
+    "note": "Shifts mobject by the sum of the given vectors. Does not move to an absolute position.",
+    "example": "circle.shift(RIGHT * 2)"
+  },
+  {
+    "name": "scale",
+    "category": "method",
+    "signature": "mobject.scale(scale_factor, **kwargs)",
+    "note": "Scales the mobject by scale_factor relative to its center.",
+    "example": "circle.scale(0.5)  # half size"
+  },
+  {
+    "name": "set_color",
+    "category": "method",
+    "signature": "mobject.set_color(color)",
+    "note": "Sets the stroke/fill color of the mobject.",
+    "example": "circle.set_color(RED)"
+  },
+  {
+    "name": "animate",
+    "category": "method",
+    "signature": "mobject.animate.<method>(...)",
+    "note": "Property that returns an animation of the mobject method call. Use inside self.play().",
+    "example": "self.play(circle.animate.shift(RIGHT).scale(2))"
+  },
+  {
+    "name": "get_center",
+    "category": "method",
+    "signature": "mobject.get_center()",
+    "note": "Returns the center point (np.ndarray) of the mobject's bounding box.",
+    "example": "center = circle.get_center()"
+  },
+  {
+    "name": "MathTex",
+    "category": "DISABLED",
+    "signature": "MathTex(*tex_strings, **kwargs)",
+    "note": "DISABLED in this pipeline — requires a LaTeX installation which is unavailable. Use Text() instead for all labels and formulas.",
+    "example": "# WRONG: MathTex(r'a^2 + b^2 = c^2')\n# RIGHT: Text('a² + b² = c²')"
+  },
+  {
+    "name": "Tex",
+    "category": "DISABLED",
+    "signature": "Tex(*tex_strings, **kwargs)",
+    "note": "DISABLED in this pipeline — requires LaTeX. Use Text() for all text content.",
+    "example": "# WRONG: Tex(r'\\frac{1}{2}')\n# RIGHT: Text('1/2')"
+  }
+]

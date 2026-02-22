@@ -10,22 +10,24 @@ Run with:
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+import shutil
+import traceback
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 _PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
-import json
-import logging
-import traceback
-from datetime import datetime
 import streamlit as st
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from auditor import LLMJudgeAuditor, SecurityAuditor
 from executor import LocalExecutor, SandboxExecutor
-from generator import ManimCodeGenerator, SceneDescription, SceneComplexity
+from generator import SceneDescription, SceneComplexity
 from orchestrator import PipelineStatus, WorkflowOrchestrator
 from uploader import DriveUploader, DriveUploaderOAuth
 
@@ -144,6 +146,7 @@ def _append_run(
     video_path: str | None = None,
     drive_link: str = "",
     attempts: int = 0,
+    code: str = "",
 ) -> None:
     _WORKING_DIR.mkdir(parents=True, exist_ok=True)
     runs = _load_runs()
@@ -158,6 +161,7 @@ def _append_run(
             "drive_link": drive_link,
             "attempts": attempts,
             "first_try": first_try,
+            "code": code,  # stored for RAG retrieval by RunsRetriever
         },
     )
     runs = runs[:100]
@@ -194,7 +198,7 @@ _STYLE_PRESETS: dict[str, str] = {
         "- Text: cream-white (#F5F5DC) as chalk strokes.\n"
         "- Use Write() for all text, DrawBorderThenFill() for shapes.\n"
         "- Colours: soft yellow, chalk pink, and light blue — like colored chalk.\n"
-        "- Prefer MathTex for equations; animate them as if handwritten.\n"
+        "- Use Text() for equations (no LaTeX/MathTex); animate them as if handwritten.\n"
         "- Pacing: moderate (wait ~0.8 s between steps).\n"
     ),
     "Futuristic Tech": (
@@ -280,25 +284,19 @@ def _build_orchestrator(
     drive_uploader: DriveUploader | DriveUploaderOAuth | None,
     use_local_manim: bool = False,
 ) -> WorkflowOrchestrator:
-    """Construct a WorkflowOrchestrator and override its LLM with UI settings."""
+    """Construct a WorkflowOrchestrator with UI settings passed through constructor."""
     _WORKING_DIR.mkdir(parents=True, exist_ok=True)
     executor = LocalExecutor() if use_local_manim else SandboxExecutor()
-    orc = WorkflowOrchestrator(
-        generator=ManimCodeGenerator(),
+    return WorkflowOrchestrator(
         auditors=[SecurityAuditor(), LLMJudgeAuditor()],
         executor=executor,
         working_dir=_WORKING_DIR,
         max_retries=3,
         model_name=model_name,
-        drive_uploader=drive_uploader,
-    )
-    # Override the hardcoded LLM so sidebar sliders take real effect
-    orc._llm = ChatGoogleGenerativeAI(
-        model=model_name,
         temperature=temperature,
         top_p=top_p,
+        drive_uploader=drive_uploader,
     )
-    return orc
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -321,7 +319,7 @@ with st.sidebar:
     st.markdown("### Model Settings")
     model_name = st.selectbox(
         "LLM Model",
-        ["gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
+        ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
         index=0,
     )
     temperature = st.slider(
@@ -369,8 +367,6 @@ with st.sidebar:
 
     # Pipeline info (前后端一体：点「Generate」后流水线在本进程内执行)
     st.markdown("### Pipeline")
-    import os
-    import shutil
     exec_label = "Local Manim" if use_local_manim else "Docker (Manim)"
     st.caption(f"Executor: **{exec_label}**")
     st.caption(f"Working dir: `{_WORKING_DIR}`")
@@ -576,6 +572,7 @@ if generate_btn:
                     video_path=video_path,
                     drive_link=pipeline_result.drive_link or "",
                     attempts=pipeline_result.total_attempts,
+                    code=st.session_state.current_code,  # persisted for RAG
                 )
 
                 # Prepend to history (keep last 3)

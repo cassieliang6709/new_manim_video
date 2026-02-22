@@ -39,6 +39,7 @@ from langgraph.graph.state import CompiledStateGraph
 from auditor import CodeAuditor
 from executor import SandboxExecutor
 from generator import ManimCodeGenerator, SceneDescription
+from retriever import ApiLookup, RunsRetriever
 from uploader import DriveUploader
 
 _logger = logging.getLogger(__name__)
@@ -140,8 +141,13 @@ class GraphState(TypedDict):
         drive_link:     Google Drive ``webViewLink`` set by ``upload_node`` on
                        a successful upload.  Empty string if upload was skipped
                        or failed.
-        debugger_hint:  Optional diagnosis from ``debugger_node`` (only set after
-                       execution failure); consumed by ``generate_node`` then cleared.
+        debugger_hint:   Optional diagnosis from ``debugger_node`` (only set after
+                        execution failure); consumed by ``generate_node`` then cleared.
+        is_fallback:    True when the rendered video came from the safe fallback script.
+        audit_retry_count: Running count of consecutive audit-only failures.
+                        Reset to 0 on audit pass.  When it reaches ``max_retries``
+                        the pipeline routes to ``fallback_node`` instead of looping
+                        forever (prevents ``GraphRecursionError``).
     """
 
     user_prompt: str
@@ -152,6 +158,8 @@ class GraphState(TypedDict):
     status: str
     drive_link: str
     debugger_hint: str
+    is_fallback: bool
+    audit_retry_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +317,9 @@ No code, no preamble. Only these two lines."""
         executor: SandboxExecutor,
         working_dir: Path,
         max_retries: int = 3,
-        model_name: str = "gemini-3-pro-preview",
+        model_name: str = "gemini-2.5-pro",
+        temperature: float = 0.2,
+        top_p: float = 0.95,
         drive_uploader: DriveUploader | None = None,
         generator: ManimCodeGenerator | None = None,
     ) -> None:
@@ -322,7 +332,19 @@ No code, no preamble. Only these two lines."""
 
         self._llm = ChatGoogleGenerativeAI(
             model=model_name,
-            temperature=0.2,
+            temperature=temperature,
+            top_p=top_p,
+        )
+        # RAG retriever: finds similar past successful scenes from runs.json.
+        # Gracefully returns [] when the file is missing or has no valid entries.
+        self._retriever = RunsRetriever(
+            runs_path=self.working_dir / "runs.json",
+            top_k=2,
+        )
+        # API lookup: error-driven; extracts symbol names from NameError /
+        # AttributeError tracebacks and returns matching Manim API docs.
+        self._api_lookup = ApiLookup(
+            index_path=Path(__file__).resolve().parent / "manim_api_index.json",
         )
         # Compile the graph once; reuse across run() calls.
         self._graph: CompiledStateGraph = self._build_graph()
@@ -353,6 +375,8 @@ No code, no preamble. Only these two lines."""
             "status": "",
             "drive_link": "",
             "debugger_hint": "",
+            "is_fallback": False,
+            "audit_retry_count": 0,
         }
 
         _logger.info(
@@ -380,8 +404,9 @@ No code, no preamble. Only these two lines."""
     def generate_node(self, state: GraphState) -> dict[str, Any]:
         """Generate or refine Manim source code using the LLM.
 
-        Detects whether this is a first attempt or a retry by inspecting
-        *current_code* and *error_message*:
+        Calls the Gemini LLM (via ``langchain-google-genai``) to produce or
+        refine a Manim scene script.  Detects whether this is a first attempt
+        or a retry by inspecting *current_code* and *error_message*:
 
         * **First attempt** — sends only *user_prompt*.
         * **Retry** — sends *user_prompt*, the previous *current_code*, and
@@ -392,7 +417,8 @@ No code, no preamble. Only these two lines."""
 
         Returns:
             Partial state update with ``current_code`` set to the newly
-            generated source and ``error_message`` cleared.
+            generated source, ``error_message`` cleared, and
+            ``audit_retry_count`` reset to 0.
         """
         is_retry = bool(state["current_code"] or state["error_message"])
 
@@ -408,7 +434,33 @@ No code, no preamble. Only these two lines."""
                 f"Generate the corrected Manim scene:"
             )
         else:
+            # ── RAG: inject similar successful past scenes as few-shot context ──
+            # Only on the first attempt; retries focus on the specific error instead.
+            few_shot = ""
+            try:
+                examples = self._retriever.get_examples(state["user_prompt"])
+                if examples:
+                    parts = [
+                        f"Request: {ex['prompt']}\n"
+                        f"```python\n{ex['code']}\n```"
+                        for ex in examples
+                    ]
+                    few_shot = (
+                        "Here are similar successful Manim scenes for reference "
+                        "(study their style and structure — do NOT copy verbatim):\n\n"
+                        + "\n\n---\n\n".join(parts)
+                        + "\n\n---\n\n"
+                    )
+                    _logger.info(
+                        "generate_node: injecting %d RAG example(s)", len(examples)
+                    )
+                else:
+                    _logger.debug("generate_node: no RAG examples (cold start)")
+            except Exception as exc:
+                _logger.warning("generate_node: RAG retrieval failed — %s", exc)
+            # ─────────────────────────────────────────────────────────────────
             user_content = (
+                f"{few_shot}"
                 f"Create a Manim animation scene for the following request:\n\n"
                 f"{state['user_prompt']}"
             )
@@ -432,7 +484,8 @@ No code, no preamble. Only these two lines."""
         return {
             "current_code": code,
             "error_message": "",
-            "debugger_hint": "",   # consumed; clear for next round
+            "debugger_hint": "",    # consumed; clear for next round
+            "audit_retry_count": 0, # fresh code → reset audit counter
         }
 
     def audit_node(self, state: GraphState) -> dict[str, Any]:
@@ -457,11 +510,19 @@ No code, no preamble. Only these two lines."""
             result = auditor.audit(code, context=ctx)
             if not result.passed:
                 reason = "; ".join(result.issues)
-                _logger.warning("audit_node: FAILED — %s", reason)
-                return {"error_message": f"[AUDIT] {reason}"}
+                new_audit_count = state["audit_retry_count"] + 1
+                _logger.warning(
+                    "audit_node: FAILED (audit_retry_count=%d) — %s",
+                    new_audit_count,
+                    reason,
+                )
+                return {
+                    "error_message": f"[AUDIT] {reason}",
+                    "audit_retry_count": new_audit_count,
+                }
 
         _logger.info("audit_node: all auditors passed")
-        return {"error_message": ""}
+        return {"error_message": "", "audit_retry_count": 0}
 
     def execute_node(self, state: GraphState) -> dict[str, Any]:
         """Execute *current_code* inside the Docker sandbox.
@@ -481,10 +542,10 @@ No code, no preamble. Only these two lines."""
         Returns:
             Partial state update reflecting success or failure.
         """
-        # _logger.info(
-        #     "execute_node: launching Docker sandbox (retry_count=%d)",
-        #     state["retry_count"],
-        # )
+        _logger.info(
+            "execute_node: launching sandbox (retry_count=%d)",
+            state["retry_count"],
+        )
 
         outcome = self.executor.run_manim(
             state["current_code"],
@@ -547,8 +608,17 @@ No code, no preamble. Only these two lines."""
             return {"debugger_hint": ""}
         if not text:
             return {"debugger_hint": ""}
-        _logger.info("debugger_node: hint length=%d", len(text))
-        return {"debugger_hint": text[:500]}
+
+        # ── API lookup: append relevant Manim docs for any NameError / AttributeError
+        api_snippet = self._api_lookup.suggest_for_error(err)
+        if api_snippet:
+            _logger.info("debugger_node: api_lookup found relevant docs")
+            hint = f"{text[:400]}\n\n{api_snippet}"
+        else:
+            hint = text[:500]
+
+        _logger.info("debugger_node: hint length=%d", len(hint))
+        return {"debugger_hint": hint[:800]}
 
     def fallback_node(self, state: GraphState) -> dict[str, Any]:
         """Run a minimal safe Manim script when max_retries was reached.
@@ -619,11 +689,26 @@ No code, no preamble. Only these two lines."""
         """Route after ``audit_node``.
 
         Returns:
-            ``"execute_node"`` if the audit passed, ``"generate_node"``
-            if it failed (the error message will guide the next LLM call).
+            * ``"execute_node"``   — audit passed.
+            * ``"generate_node"``  — audit failed and retries remain.
+            * ``"fallback_node"``  — audit failed ``max_retries`` times in a
+              row without any execution attempt; prevents ``GraphRecursionError``
+              from exhausting ``recursion_limit``.
         """
         if state["error_message"]:
-            _logger.info("route_after_audit → generate_node (audit failed)")
+            if state["audit_retry_count"] >= self.max_retries:
+                _logger.warning(
+                    "route_after_audit → fallback_node "
+                    "(audit_retry_count=%d reached cap of %d)",
+                    state["audit_retry_count"],
+                    self.max_retries,
+                )
+                return "fallback_node"
+            _logger.info(
+                "route_after_audit → generate_node "
+                "(audit failed, audit_retry_count=%d)",
+                state["audit_retry_count"],
+            )
             return "generate_node"
         _logger.info("route_after_audit → execute_node (audit passed)")
         return "execute_node"
@@ -711,13 +796,14 @@ No code, no preamble. Only these two lines."""
         # ── Fixed edge: upload → END (unconditional) ─────────────────────────
         graph.add_edge("upload_node", END)
 
-        # ── Conditional edge: audit → generate | execute ────────────────────
+        # ── Conditional edge: audit → generate | execute | fallback ─────────
         graph.add_conditional_edges(
             "audit_node",
             self._route_after_audit,
             {
                 "generate_node": "generate_node",
                 "execute_node": "execute_node",
+                "fallback_node": "fallback_node",
             },
         )
 

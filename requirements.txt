@@ -8,5 +8,9 @@ google-api-python-client>=2.100.0
 google-auth>=2.25.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
+numpy>=1.24.0
+
+# RAG: few-shot retrieval from runs.json
+sentence-transformers>=3.0.0
 
 # For --local execution (no Docker): pip install manim

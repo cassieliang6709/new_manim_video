@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  visocode:
+    build: .
+    container_name: visocode_app
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount host Docker socket so the app can launch Manim containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent output directory
+      - ./manim_output:/app/manim_output
+      # Secrets (never baked into image)
+      - ./.env:/app/.env:ro
+      - ./client_secrets.json:/app/client_secrets.json:ro
+      - ./token.json:/app/token.json
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

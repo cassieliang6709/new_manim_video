@@ -248,7 +248,7 @@ class SandboxExecutor(BaseExecutor):
                         }
                     },
                     network_disabled=True,
-                    mem_limit="1g",
+                    mem_limit=self.memory_limit,
                     cpu_quota=self.cpu_quota,
                     detach=True,
                     remove=False,   # Manual removal after log capture

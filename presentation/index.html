@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visocode — Technical Presentation</title>
+
+  <!-- Reveal.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" />
+  <!-- Syntax highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css" />
+
+  <style>
+    /* ── Base ────────────────────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --blue:      #58a6ff;
+      --green:     #3fb950;
+      --orange:    #f0883e;
+      --purple:    #bc8cff;
+      --red:       #ff7b72;
+      --yellow:    #e3b341;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+    }
+
+    .reveal-viewport { background: var(--bg); }
+    .reveal .slides   { color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── Typography ─────────────────────────────────────── */
+    .reveal h1 { font-size: 2.4rem; font-weight: 700; color: var(--blue); letter-spacing: -0.5px; }
+    .reveal h2 { font-size: 1.7rem; font-weight: 600; color: var(--text); margin-bottom: 0.5em; }
+    .reveal h3 { font-size: 1.1rem; font-weight: 600; color: var(--blue); text-transform: uppercase; letter-spacing: 1px; }
+    .reveal p, .reveal li { font-size: 0.95rem; line-height: 1.7; color: var(--text); }
+    .reveal .slides section { text-align: left; }
+
+    /* ── Tag / Badge ─────────────────────────────────────── */
+    .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      vertical-align: middle;
+      margin: 0 3px;
+    }
+    .tag-blue   { background: rgba(88,166,255,0.15); color: var(--blue);   border: 1px solid rgba(88,166,255,0.3); }
+    .tag-green  { background: rgba(63,185,80,0.15);  color: var(--green);  border: 1px solid rgba(63,185,80,0.3); }
+    .tag-orange { background: rgba(240,136,62,0.15); color: var(--orange); border: 1px solid rgba(240,136,62,0.3); }
+    .tag-purple { background: rgba(188,140,255,0.15);color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+    .tag-red    { background: rgba(255,123,114,0.15);color: var(--red);    border: 1px solid rgba(255,123,114,0.3); }
+
+    /* ── Card ────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+    }
+    .card-blue   { border-left: 3px solid var(--blue); }
+    .card-green  { border-left: 3px solid var(--green); }
+    .card-orange { border-left: 3px solid var(--orange); }
+    .card-purple { border-left: 3px solid var(--purple); }
+
+    /* ── Grid helpers ────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* ── Metric box ──────────────────────────────────────── */
+    .metric {
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 12px;
+    }
+    .metric-val { font-size: 2rem; font-weight: 700; display: block; }
+    .metric-lbl { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 4px; }
+    .metric-blue   .metric-val { color: var(--blue); }
+    .metric-green  .metric-val { color: var(--green); }
+    .metric-orange .metric-val { color: var(--orange); }
+    .metric-purple .metric-val { color: var(--purple); }
+
+    /* ── Flow diagram ────────────────────────────────────── */
+    .flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 10px 0;
+    }
+    .flow-node {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-align: center;
+      min-width: 90px;
+    }
+    .flow-node.active { border-color: var(--blue); color: var(--blue); }
+    .flow-node.warn   { border-color: var(--orange); color: var(--orange); }
+    .flow-node.ok     { border-color: var(--green); color: var(--green); }
+    .flow-node.danger { border-color: var(--red); color: var(--red); }
+    .flow-node.muted  { border-color: var(--muted); color: var(--muted); }
+    .flow-arrow {
+      color: var(--muted);
+      font-size: 1rem;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    /* ── Problem card ────────────────────────────────────── */
+    .prob-header {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      color: var(--red);
+    }
+    .sol-header {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      color: var(--green);
+    }
+    .prob-body { font-size: 0.78rem; color: var(--text); line-height: 1.5; }
+    .divider   { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+    /* ── Code block overrides ────────────────────────────── */
+    .reveal pre {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: none;
+      font-size: 0.72rem;
+    }
+    .reveal pre code { padding: 12px 16px; }
+
+    /* ── Misc ────────────────────────────────────────────── */
+    .highlight-blue   { color: var(--blue); }
+    .highlight-green  { color: var(--green); }
+    .highlight-orange { color: var(--orange); }
+    .highlight-purple { color: var(--purple); }
+    .highlight-red    { color: var(--red); }
+    .muted { color: var(--muted); }
+
+    .section-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .quote-box {
+      border-left: 3px solid var(--blue);
+      padding: 14px 20px;
+      background: rgba(88,166,255,0.06);
+      border-radius: 0 8px 8px 0;
+      font-size: 1rem;
+      font-style: italic;
+      color: var(--text);
+      margin: 10px 0;
+    }
+
+    .rag-row {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .rag-col {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .rag-col h4 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 8px;
+    }
+    .rag-col p { font-size: 0.78rem; line-height: 1.5; color: var(--muted); margin: 0; }
+
+    /* Title slide gradient text */
+    .gradient-title {
+      background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 50%, #3fb950 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 0 — Title
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div style="text-align:center; padding: 30px 0;">
+    <div class="section-label" style="text-align:center; margin-bottom:20px;">Portfolio Project</div>
+    <h1 class="gradient-title" style="font-size:3rem; margin-bottom:16px;">Visocode</h1>
+    <p style="font-size:1.15rem; color:#8b949e; margin-bottom:40px;">
+      From Natural Language to Manim Animation — with a Reliability-First AI Pipeline
+    </p>
+    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+      <span class="tag tag-blue">LangGraph</span>
+      <span class="tag tag-green">Gemini 2.5 Pro</span>
+      <span class="tag tag-orange">Docker Sandbox</span>
+      <span class="tag tag-purple">RAG</span>
+      <span class="tag tag-blue">Streamlit</span>
+      <span class="tag tag-green">Google Drive API</span>
+    </div>
+    <div style="margin-top:50px; color:#30363d; font-size:0.75rem;">Press → to navigate · S for speaker notes · F for fullscreen</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 1 — Hook & Problem
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">01 / Hook &amp; Problem</div>
+  <h2>"From Text to Animation in 30 Seconds —<br><span class="highlight-blue">with a Reliability-First AI Pipeline</span>"</h2>
+
+  <div class="grid-2" style="margin-top:20px;">
+    <div class="card card-red">
+      <h3 style="color:var(--red);">The Problem</h3>
+      <ul style="list-style:none; padding:0; margin:0;">
+        <li style="padding:5px 0; font-size:0.85rem;"><span style="color:var(--red);">✗</span> &nbsp;Manim has a steep learning curve</li>
+        <li style="padding:5px 0; font-size:0.85rem;"><span style="color:var(--red);">✗</span> &nbsp;LLM-generated code has hallucinated APIs</li>
+        <li style="padding:5px 0; font-size:0.85rem;"><span style="color:var(--red);">✗</span> &nbsp;Passes static checks, crashes at runtime</li>
+        <li style="padding:5px 0; font-size:0.85rem;"><span style="color:var(--red);">✗</span> &nbsp;"Correct" code generates blank video</li>
+      </ul>
+      <hr class="divider" />
+      <p style="font-size:0.8rem; color:var(--muted); margin:0;">
+        The hard part isn't generating code.<br>
+        <strong style="color:var(--text);">The hard part is making it reliably work.</strong>
+      </p>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div class="card card-green">
+        <h3 style="color:var(--green);">The Solution</h3>
+        <p style="font-size:0.82rem; margin:0;">
+          User types: <em style="color:var(--blue);">"Visualize bubble sort step by step"</em><br>
+          30 seconds later → an .mp4, uploaded to Google Drive.
+        </p>
+      </div>
+      <div class="grid-3" style="gap:10px;">
+        <div class="metric metric-blue">
+          <span class="metric-val">2</span>
+          <span class="metric-lbl">Safety layers<br>(AST + LLM Judge)</span>
+        </div>
+        <div class="metric metric-green">
+          <span class="metric-val">~30s</span>
+          <span class="metric-lbl">Avg generation<br>time</span>
+        </div>
+        <div class="metric metric-orange">
+          <span class="metric-val">5</span>
+          <span class="metric-lbl">Node types in<br>LangGraph DAG</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    开场先播 15 秒 Demo，再说话。
+    这个项目的核心不是"我用 LLM 生成了代码"，而是讲 pipeline 如何保证可靠性。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 2 — Architecture Overview
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">02 / Architecture</div>
+  <h2>"A LangGraph Pipeline with <span class="highlight-blue">Deterministic Safety Layers</span>"</h2>
+
+  <!-- Flow diagram -->
+  <div class="flow" style="margin: 16px 0 10px;">
+    <div class="flow-node active">
+      GENERATE<br>
+      <span style="font-size:0.6rem; font-weight:400; color:var(--muted);">Gemini 2.5 Pro</span>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node warn">
+      AUDIT<br>
+      <span style="font-size:0.6rem; font-weight:400; color:var(--muted);">AST + LLM Judge</span>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node ok">
+      EXECUTE<br>
+      <span style="font-size:0.6rem; font-weight:400; color:var(--muted);">Docker sandbox</span>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node ok">
+      UPLOAD<br>
+      <span style="font-size:0.6rem; font-weight:400; color:var(--muted);">Google Drive</span>
+    </div>
+  </div>
+  <div style="display:flex; justify-content:center; gap:20px; font-size:0.72rem; color:var(--muted); margin-bottom:14px;">
+    <span>audit fail → retry generate</span>
+    <span>|</span>
+    <span>exec fail → DEBUGGER → generate</span>
+    <span>|</span>
+    <span>max retries → FALLBACK</span>
+  </div>
+
+  <div class="grid-3" style="gap:12px;">
+    <div class="card card-blue">
+      <h3>Why LangGraph?</h3>
+      <p style="font-size:0.78rem; margin:0;">
+        Control flow isn't linear — audit fail routes differently than exec fail.
+        LangGraph separates <strong>graph topology</strong> from <strong>business logic</strong>.
+        Adding a node doesn't touch other nodes.
+      </p>
+    </div>
+    <div class="card card-orange">
+      <h3>Two-layer Audit</h3>
+      <p style="font-size:0.78rem; margin:0;">
+        <strong style="color:var(--text);">Layer 1:</strong> AST static scan — deterministic, blocks dangerous imports.<br>
+        <strong style="color:var(--text);">Layer 2:</strong> LLM Judge (Flash) — semantic check, 3–5× cheaper than Pro.
+      </p>
+    </div>
+    <div class="card card-purple">
+      <h3>Debugger Node</h3>
+      <p style="font-size:0.78rem; margin:0;">
+        Compresses 2000-char traceback → 2 lines:<br>
+        <code style="font-size:0.7rem; color:var(--orange);">DIAGNOSIS:</code> root cause<br>
+        <code style="font-size:0.7rem; color:var(--green);">FIX:</code> concrete action<br>
+        <span style="color:var(--muted);">SNR ↑, token cost ↓, fix rate ↑</span>
+      </p>
+    </div>
+  </div>
+
+  <aside class="notes">
+    重点讲三个设计决策，每个约 2 分钟。
+    1. LangGraph vs while loop — 拓扑和逻辑分离
+    2. 两层 Audit — 确定性 vs 语义，互补
+    3. Debugger 独立节点 — 降噪，廉价任务为昂贵任务服务
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 2b — Tech Stack Deep Dive
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">02b / Tech Stack</div>
+  <h2>Technology Choices & <span class="highlight-blue">Trade-offs</span></h2>
+
+  <div class="grid-2" style="gap:14px; margin-top:16px;">
+    <div>
+      <div class="card card-blue" style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">LangGraph StateGraph</h3>
+          <span class="tag tag-blue">Orchestration</span>
+        </div>
+        <p style="font-size:0.78rem; margin:6px 0 0;">
+          TypedDict state shared across all nodes. Conditional edges computed at runtime.
+          <code style="color:var(--blue);">recursion_limit=50</code> as hard safety cap.
+        </p>
+      </div>
+      <div class="card card-orange" style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">Docker Sandbox</h3>
+          <span class="tag tag-orange">Execution</span>
+        </div>
+        <p style="font-size:0.78rem; margin:6px 0 0;">
+          <code style="color:var(--orange);">manimcommunity/manim</code> · network_disabled · mem 1 GB ·
+          cpu_quota · timeout 120s. Container removed after every run.
+        </p>
+      </div>
+      <div class="card card-green">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">Gemini 2.5 Pro/Flash</h3>
+          <span class="tag tag-green">LLM</span>
+        </div>
+        <p style="font-size:0.78rem; margin:6px 0 0;">
+          Pro for generation (quality), Flash for Judge (cost).
+          Architecture is model-agnostic — swap to GPT-4 in one line.
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card card-purple" style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">RAG — Two Tiers</h3>
+          <span class="tag tag-purple">Retrieval</span>
+        </div>
+        <p style="font-size:0.78rem; margin:6px 0 0;">
+          <strong style="color:var(--text);">Tier 1:</strong> <code>sentence-transformers</code> over <code>runs.json</code> — few-shot examples at generation time.<br>
+          <strong style="color:var(--text);">Tier 2:</strong> <code>manim_api_index.json</code> (57 entries) — error-driven doc injection at debug time.
+        </p>
+      </div>
+      <div class="card card-blue">
+        <h3 style="margin:0 0 8px;">State Machine — GraphState</h3>
+        <pre><code class="language-python" style="font-size:0.62rem;">class GraphState(TypedDict):
+    user_prompt:       str
+    generated_code:    str
+    audit_result:      str   # PASS | FAIL
+    audit_retry_count: int   # 熔断计数
+    execution_result:  dict
+    debugger_hint:     str
+    output_path:       str
+    is_fallback:       bool</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    这张 slide 是技术深度，面试官如果想深入某个组件可以在这里展开讨论。
+    重点：GraphState 是整个 pipeline 的数据合约，每个节点只读写自己关心的字段。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 3 — 3 Engineering Challenges
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">03 / Engineering Challenges</div>
+  <h2>"Three Problems I Didn't Expect — <span class="highlight-orange">and How I Solved Them</span>"</h2>
+
+  <div class="grid-3" style="margin-top:16px;">
+
+    <!-- Problem 1 -->
+    <div class="card" style="border-left:3px solid var(--red);">
+      <div class="prob-header">Problem 1 · Infinite Loop</div>
+      <p class="prob-body">
+        LLM Judge kept returning FAIL.<br>
+        No audit retry cap →<br>
+        <code style="font-size:0.7rem; color:var(--red);">GraphRecursionError</code> at limit 50.<br>
+        User sees: blank screen.
+      </p>
+      <hr class="divider"/>
+      <div class="sol-header">Fix · audit_retry_count</div>
+      <p class="prob-body">
+        Added <code style="color:var(--green);">audit_retry_count</code> to <code>GraphState</code>.
+        Increments on each audit fail.
+        Routes to <code style="color:var(--orange);">fallback_node</code> at cap.
+        Resets when new code is generated.
+      </p>
+      <hr class="divider"/>
+      <p style="font-size:0.7rem; color:var(--muted); margin:0;">
+        Lesson: <strong style="color:var(--text);">Different failure types need separate counters and circuit breakers.</strong>
+      </p>
+    </div>
+
+    <!-- Problem 2 -->
+    <div class="card" style="border-left:3px solid var(--yellow);">
+      <div class="prob-header" style="color:var(--yellow);">Problem 2 · Traceback Noise</div>
+      <p class="prob-body">
+        Full tracebacks = 2000+ chars.<br>
+        Real error buried in the middle.<br>
+        LLM "fixed" wrong lines.<br>
+        Retry success rate: low.
+      </p>
+      <hr class="divider"/>
+      <div class="sol-header">Fix · _compress_traceback()</div>
+      <p class="prob-body">
+        Extract last 5 lines + last <code>File "...", line N</code>.
+        Prepend structured signal:
+        <code style="font-size:0.68rem; color:var(--yellow);">TIMEOUT / NO_OUTPUT / RUNTIME_ERROR</code>.
+        2000 chars → 200 chars, structured.
+      </p>
+      <hr class="divider"/>
+      <p style="font-size:0.7rem; color:var(--muted); margin:0;">
+        Lesson: <strong style="color:var(--text);">Root-cause classification before passing to LLM = better fix direction.</strong>
+      </p>
+    </div>
+
+    <!-- Problem 3 -->
+    <div class="card" style="border-left:3px solid var(--purple);">
+      <div class="prob-header" style="color:var(--purple);">Problem 3 · NameError Guessing</div>
+      <p class="prob-body">
+        <code style="font-size:0.7rem; color:var(--red);">NameError: name 'Write' is not defined</code><br>
+        LLM guesses from memory.<br>
+        Manim API versions differ.<br>
+        Fix is imprecise or wrong.
+      </p>
+      <hr class="divider"/>
+      <div class="sol-header">Fix · ApiLookup</div>
+      <p class="prob-body">
+        Regex extracts symbol name from error.
+        Looks up <code>manim_api_index.json</code> (57 entries).
+        Injects exact signature + runnable example into debugger hint.
+      </p>
+      <hr class="divider"/>
+      <p style="font-size:0.7rem; color:var(--muted); margin:0;">
+        Lesson: <strong style="color:var(--text);">Tell LLM the right answer, not just the error.</strong>
+      </p>
+    </div>
+
+  </div>
+
+  <aside class="notes">
+    三个问题各约 2 分钟。
+    Problem 1 最重要，必讲。Problem 2+3 可合并为"反馈质量的两个维度"。
+    每个讲完后停顿 1-2 秒，让面试官有打断提问的机会。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 3b — ApiLookup Code Walkthrough
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">03b / Code Deep Dive · Error-Driven RAG</div>
+  <h2>From <span class="highlight-red">NameError</span> to <span class="highlight-green">Correct Fix</span> — in One Lookup</h2>
+
+  <div class="grid-2" style="margin-top:14px; gap:14px;">
+    <div>
+      <p style="font-size:0.75rem; color:var(--muted); margin:0 0 6px;">1. Traceback arrives at debugger_node</p>
+      <pre><code class="language-python">NameError: name 'Write' is not defined
+  File "scene_abc.py", line 14
+    self.play(Write(title))</code></pre>
+
+      <p style="font-size:0.75rem; color:var(--muted); margin:8px 0 6px;">2. ApiLookup extracts symbol + looks up index</p>
+      <pre><code class="language-python">_NAMEERROR_RE = re.compile(r"name '(\w+)' is not defined")
+
+# Matches → "Write"
+# Looks up manim_api_index.json
+# Returns entry with signature + example</code></pre>
+    </div>
+    <div>
+      <p style="font-size:0.75rem; color:var(--muted); margin:0 0 6px;">3. Debugger hint injected into next generate call</p>
+      <pre><code class="language-text">DIAGNOSIS: Missing import for Write animation class.
+FIX: Add Write to the manim import statement.
+
+[Manim API — Write]
+  Animates writing a Text or VMobject stroke by stroke.
+  Signature: Write(mobject, run_time=1, **kwargs)
+  Example:   self.play(Write(Text('Hello')))</code></pre>
+
+      <div class="card card-green" style="margin-top:10px; padding:12px 16px;">
+        <p style="font-size:0.8rem; margin:0;">
+          Generator receives <strong>the correct answer</strong>, not just the error.
+          NameError fix precision improves significantly.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    这张可以用来回答"你的 RAG 具体怎么用"的问题。
+    强调两种 RAG 的互补性：生成时 few-shot（泛），debug 时 ApiLookup（精）。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 4 — RAG System Design
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">04 / RAG System Design</div>
+  <h2>Two-Tier Retrieval: <span class="highlight-purple">Generation</span> + <span class="highlight-orange">Debug</span></h2>
+
+  <div class="rag-row" style="margin-top:16px;">
+    <div class="rag-col" style="border-left:3px solid var(--purple);">
+      <h4 style="color:var(--purple);">Tier 1 — Few-shot at Generation Time</h4>
+      <p>
+        <strong style="color:var(--text);">Source:</strong> <code>runs.json</code> (successful past scenes)<br>
+        <strong style="color:var(--text);">Model:</strong> <code>all-MiniLM-L6-v2</code> (sentence-transformers)<br>
+        <strong style="color:var(--text);">Strategy:</strong> Cosine similarity over prompt embeddings → top-2 examples injected as few-shot<br>
+        <strong style="color:var(--text);">Cold start:</strong> Returns [] gracefully → zero-shot fallback
+      </p>
+      <div style="background:rgba(188,140,255,0.06); border-radius:6px; padding:8px 12px; font-size:0.72rem; color:var(--muted);">
+        When to use: <strong style="color:var(--text);">first attempt only</strong> — retry path already has specific error feedback
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; font-size:1.5rem; color:var(--muted); padding:0 6px;">+</div>
+
+    <div class="rag-col" style="border-left:3px solid var(--orange);">
+      <h4 style="color:var(--orange);">Tier 2 — Error-Driven at Debug Time</h4>
+      <p>
+        <strong style="color:var(--text);">Source:</strong> <code>manim_api_index.json</code> (57 hand-curated entries)<br>
+        <strong style="color:var(--text);">Model:</strong> Regex — no ML needed, deterministic<br>
+        <strong style="color:var(--text);">Strategy:</strong> Extract symbol from NameError/AttributeError → exact doc lookup<br>
+        <strong style="color:var(--text);">Signal-to-noise:</strong> Only injects docs for the exact failing symbol
+      </p>
+      <div style="background:rgba(240,136,62,0.06); border-radius:6px; padding:8px 12px; font-size:0.72rem; color:var(--muted);">
+        Design principle: <strong style="color:var(--text);">error-driven fine-grained retrieval &gt; broad retrieval at generation time</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px; padding:12px 18px; border-left:3px solid var(--blue);">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <p style="font-size:0.8rem; margin:0;">
+          <span class="highlight-blue">Future:</span> Full Manim v0.18 docs vectorized by class/method as chunk unit →
+          vector DB → two-level lookup (static index first, vector DB on miss)
+        </p>
+      </div>
+      <span class="tag tag-blue" style="white-space:nowrap; margin-left:16px;">What's Next</span>
+    </div>
+  </div>
+
+  <aside class="notes">
+    如果面试官问"你的 RAG 和普通 RAG 有什么区别"——
+    关键是"error-driven"：我知道具体哪个 API 出问题了，所以可以精确查，而不是泛检索。
+    两种策略互补：Tier 1 提升生成质量，Tier 2 提升 debug 精度。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 5 — Results & What's Next
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">05 / Results &amp; What's Next</div>
+  <h2>"What It Can Do Now — <span class="highlight-green">and What I'd Build Next</span>"</h2>
+
+  <div class="grid-2" style="margin-top:16px; gap:16px;">
+    <div>
+      <h3 style="margin-bottom:12px;">Current Capabilities</h3>
+      <div class="grid-2" style="gap:10px; margin-bottom:14px;">
+        <div class="metric metric-blue">
+          <span class="metric-val">2</span>
+          <span class="metric-lbl">Safety layers<br>AST + LLM Judge</span>
+        </div>
+        <div class="metric metric-green">
+          <span class="metric-val">57</span>
+          <span class="metric-lbl">Manim APIs<br>indexed</span>
+        </div>
+        <div class="metric metric-orange">
+          <span class="metric-val">120s</span>
+          <span class="metric-lbl">Max sandbox<br>timeout</span>
+        </div>
+        <div class="metric metric-purple">
+          <span class="metric-val">5</span>
+          <span class="metric-lbl">Max retries<br>before fallback</span>
+        </div>
+      </div>
+      <div class="quote-box" style="font-size:0.82rem; font-style:normal;">
+        "Reliability in LLM pipelines comes from
+        <strong>deterministic layers</strong>, not better prompts."
+      </div>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:12px;">If I Had More Time</h3>
+      <div style="display:flex; flex-direction:column; gap:9px;">
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+          <span class="tag tag-orange" style="margin-top:2px; white-space:nowrap;">Priority 1</span>
+          <p style="font-size:0.8rem; margin:0;"><strong>Task queue</strong> (Celery + Redis) — non-blocking UI, real-time progress via WebSocket</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+          <span class="tag tag-blue" style="margin-top:2px; white-space:nowrap;">Priority 2</span>
+          <p style="font-size:0.8rem; margin:0;"><strong>Per-task UUID dirs</strong> — eliminate file race condition in concurrent usage</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+          <span class="tag tag-green" style="margin-top:2px; white-space:nowrap;">Priority 3</span>
+          <p style="font-size:0.8rem; margin:0;"><strong>Streaming progress</strong> — <code>stream=True</code> for LLM + tail Docker logs</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+          <span class="tag tag-purple" style="margin-top:2px; white-space:nowrap;">Design</span>
+          <p style="font-size:0.8rem; margin:0;"><strong>Full Manim docs RAG</strong> — chunk by class/method, two-level retrieval with vector DB</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    Results 数字要来自真实 runs.json 数据，面试官会追问来源。
+    Key Takeaway 那句话要背下来，作为收尾句。
+    "就这些，有什么问题欢迎展开聊" 比 "谢谢大家" 更自信专业。
+  </aside>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SLIDE 6 — Q&A Cheat Sheet
+═══════════════════════════════════════════════════════ -->
+<section data-background-color="#0d1117">
+  <div class="section-label">06 / Q&amp;A Prep</div>
+  <h2>Common Follow-up Questions</h2>
+
+  <div style="display:flex; flex-direction:column; gap:10px; margin-top:16px;">
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+        <p style="font-size:0.78rem; color:var(--blue); margin:0; min-width:220px;">"Why LangGraph over a while loop?"</p>
+        <p style="font-size:0.78rem; color:var(--text); margin:0;">Control flow isn't linear — different failures route differently. Graph topology + business logic stay separate. Adding a node doesn't touch others.</p>
+      </div>
+    </div>
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+        <p style="font-size:0.78rem; color:var(--blue); margin:0; min-width:220px;">"Can LLM Judge give false positives?"</p>
+        <p style="font-size:0.78rem; color:var(--text); margin:0;">Yes — but misclassification costs one extra retry, not a wrong video. Execution layer still catches runtime errors. Soft constraint, not hard gate.</p>
+      </div>
+    </div>
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+        <p style="font-size:0.78rem; color:var(--blue); margin:0; min-width:220px;">"Why Gemini not GPT-4?"</p>
+        <p style="font-size:0.78rem; color:var(--text); margin:0;">Free API quota for development; architecture is model-agnostic — swap to GPT-4 in one line. The engineering decisions don't change.</p>
+      </div>
+    </div>
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+        <p style="font-size:0.78rem; color:var(--blue); margin:0; min-width:220px;">"Docker cold start latency?"</p>
+        <p style="font-size:0.78rem; color:var(--text); margin:0;">First pull is slow; subsequent runs use local cache. Production fix: pre-warmed container pool. MVP tradeoff: isolation over speed.</p>
+      </div>
+    </div>
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+        <p style="font-size:0.78rem; color:var(--blue); margin:0; min-width:220px;">"Concurrent write to runs.json?"</p>
+        <p style="font-size:0.78rem; color:var(--text); margin:0;">Not handled in MVP — single-user scenario. Next: SQLite with WAL mode for native concurrent write support.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    这张 slide 是私人备忘，不需要在面试中展示。
+    遇到这些问题时，回答要诚实说出权衡取舍，不要假装完美。
+  </aside>
+</section>
+
+</div>
+</div>
+
+<!-- Reveal.js -->
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+
+<script>
+  Reveal.initialize({
+    hash: true,
+    transition: 'slide',
+    transitionSpeed: 'fast',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    slideNumber: 'c/t',
+    showSlideNumber: 'all',
+    center: false,
+    margin: 0.08,
+    plugins: [ RevealHighlight, RevealNotes ],
+  });
+</script>
+</body>
+</html>
