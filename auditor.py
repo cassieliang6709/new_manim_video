@@ -1,11 +1,13 @@
 """
 auditor.py
 
-Defines the base CodeAuditor abstract class and the SecurityAuditor subclass
+Defines the base CodeAuditor abstract class, SecurityAuditor, and LLMJudgeAuditor
 for validating and auditing generated Manim code before execution.
 """
 
 import ast
+import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -34,11 +36,12 @@ class CodeAuditor(ABC):
     """
 
     @abstractmethod
-    def audit(self, source_code: str) -> AuditResult:
+    def audit(self, source_code: str, context: dict[str, Any] | None = None) -> AuditResult:
         """Analyse *source_code* and return an :class:`AuditResult`.
 
         Args:
             source_code: The raw Python source code to inspect.
+            context: Optional dict (e.g. user_prompt) for auditors that need it (e.g. LLM Judge).
 
         Returns:
             An :class:`AuditResult` describing any issues found.
@@ -96,7 +99,7 @@ class SecurityAuditor(CodeAuditor):
     # Public interface
     # ------------------------------------------------------------------
 
-    def audit(self, source_code: str) -> AuditResult:
+    def audit(self, source_code: str, context: dict[str, Any] | None = None) -> AuditResult:
         """Scan *source_code* for security violations using the AST.
 
         Delegates to :meth:`_scan`, which returns a plain ``dict`` with keys
@@ -168,6 +171,73 @@ class SecurityAuditor(CodeAuditor):
             return {"is_safe": False, "reason": "; ".join(visitor.violations)}
 
         return {"is_safe": True}
+
+
+class LLMJudgeAuditor(CodeAuditor):
+    """LLM-as-Judge: uses a cheap model to check if generated code matches the user request.
+
+    Outputs only PASS/FAIL and one line REASON; can flag deprecated API or hallucination.
+    Runs after SecurityAuditor. Uses GOOGLE_API_KEY and gemini-2.5-flash.
+    """
+
+    _JUDGE_SYSTEM = """You are a judge for Manim (math animation library) code.
+Given the user's request and the generated Python code, output ONLY one of:
+- PASS
+- FAIL
+
+If FAIL, add exactly one line after FAIL: REASON: <short reason>.
+PASS when: the code is valid Manim, matches the theme/topic of the request, and uses only real Manim API.
+FAIL only for: completely irrelevant topic, deprecated/wrong Manim API (e.g. old imports, non-existent names), or code that cannot run.
+Do NOT fail for: missing comments, incomplete diagrams, or teaching structure. Those are optional.
+PASS only when the scene actually animates or illustrates the requested concept — if it is just a single static Text with no real animation, FAIL with REASON: scene is too minimal, add proper animations.
+Output nothing else."""
+
+    _REASON_RE = re.compile(r"REASON:\s*(.+)", re.IGNORECASE | re.DOTALL)
+
+    def __init__(self, model: str = "gemini-2.5-flash", api_key: str | None = None) -> None:
+        self.model = model
+        self._api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        self._llm = None
+        if self._api_key:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            self._llm = ChatGoogleGenerativeAI(
+                model=self.model,
+                google_api_key=self._api_key,
+                temperature=0,
+            )
+
+    def audit(self, source_code: str, context: dict[str, Any] | None = None) -> AuditResult:
+        if not self._llm:
+            return AuditResult(passed=True, issues=[], metadata={"judge": "skipped_no_api_key"})
+        user_prompt = (context or {}).get("user_prompt", "")
+        if not user_prompt:
+            return AuditResult(passed=True, issues=[], metadata={"judge": "skipped_no_prompt"})
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+        messages = [
+            SystemMessage(content=self._JUDGE_SYSTEM),
+            HumanMessage(content=f"User request:\n{user_prompt}\n\nGenerated code:\n```python\n{source_code}\n```\n\nPASS or FAIL?"),
+        ]
+        try:
+            response = self._llm.invoke(messages)
+            text = (response.content or "").strip().upper()
+        except Exception as e:
+            return AuditResult(
+                passed=True,
+                issues=[],
+                metadata={"judge": "error", "error": str(e)},
+            )
+
+        if "PASS" in text and "FAIL" not in text[:10]:
+            return AuditResult(passed=True, metadata={"judge": "pass"})
+        reason = "Judge did not pass."
+        match = self._REASON_RE.search(text)
+        if match:
+            reason = match.group(1).strip().split("\n")[0][:200]
+        return AuditResult(passed=False, issues=[reason], metadata={"judge": "fail"})
+
+    def describe(self) -> str:
+        return "LLMJudgeAuditor: checks generated code matches user request (PASS/FAIL + reason)."
 
 
 # ---------------------------------------------------------------------------

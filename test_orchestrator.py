@@ -310,22 +310,21 @@ class TestRoutingFunctions(unittest.TestCase):
         state = self._state(status="success", output_path="/tmp/x.mp4")
         self.assertEqual(self.orch._route_after_execute(state), "upload_node")
 
-    def test_execute_failure_with_retries_routes_to_generate(self) -> None:
+    def test_execute_failure_with_retries_routes_to_debugger(self) -> None:
         state = self._state(
             error_message="[EXECUTE] crash",
             retry_count=1,
             status="",
         )
-        self.assertEqual(self.orch._route_after_execute(state), "generate_node")
+        self.assertEqual(self.orch._route_after_execute(state), "debugger_node")
 
-    def test_execute_failure_at_max_retries_routes_to_end(self) -> None:
-        from langgraph.graph import END
+    def test_execute_failure_at_max_retries_routes_to_fallback(self) -> None:
         state = self._state(
             error_message="[EXECUTE] crash",
             retry_count=3,          # == max_retries
             status="max_retries_exceeded",
         )
-        self.assertEqual(self.orch._route_after_execute(state), END)
+        self.assertEqual(self.orch._route_after_execute(state), "fallback_node")
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +434,8 @@ class TestFullGraphIntegration(unittest.TestCase):
 
         self.assertEqual(result.status, PipelineStatus.MAX_RETRIES_EXCEEDED)
         self.assertEqual(result.output_files, [])
-        self.assertEqual(orch.executor.run_manim.call_count, 3)
+        # 3 execute_node attempts + 1 fallback_node attempt when all fail
+        self.assertEqual(orch.executor.run_manim.call_count, 4)
 
     def test_final_state_attached_to_result(self) -> None:
         orch = self._build_orch()
@@ -486,11 +486,11 @@ class TestBuildFeedback(unittest.TestCase):
         fb = self.orch._build_feedback(self._state(f"[EXECUTE] {tb}"))
         self.assertIn("ValueError", fb)
 
-    def test_long_traceback_is_truncated(self) -> None:
-        long_tb = "x" * 3000
+    def test_long_traceback_compressed(self) -> None:
+        long_tb = "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\n  File \"script.py\", line 10"
         fb = self.orch._build_feedback(self._state(f"[EXECUTE] {long_tb}"))
-        self.assertLess(len(fb), 2500)
-        self.assertIn("truncated", fb)
+        self.assertLess(len(fb), 500)
+        self.assertIn("last 5 lines", fb.lower())
 
     def test_empty_error_returns_fallback_message(self) -> None:
         fb = self.orch._build_feedback(self._state(""))

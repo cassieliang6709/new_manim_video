@@ -31,7 +31,7 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 
-from auditor import SecurityAuditor
+from auditor import LLMJudgeAuditor, SecurityAuditor
 from executor import LocalExecutor, SandboxExecutor
 from generator import SceneComplexity, SceneDescription
 from orchestrator import PipelineStatus, WorkflowOrchestrator
@@ -48,7 +48,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # ── 组装各模块 ────────────────────────────────────────────────────
-    auditors = [SecurityAuditor()]
+    auditors = [SecurityAuditor(), LLMJudgeAuditor()]
     executor = LocalExecutor() if args.local else SandboxExecutor()
     drive_uploader = (
         DriveUploader(credentials_path="credentials.json", folder_id=args.folder_id)

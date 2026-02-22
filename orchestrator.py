@@ -49,6 +49,55 @@ _logger = logging.getLogger(__name__)
 
 _CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
 
+# Traceback: last "File \"...\", line N" for error location
+_FILE_LINE_RE = re.compile(r'File "([^"]+)", line (\d+)')
+
+# Safe fallback Manim script when max_retries reached (unique name to avoid LLM copying)
+SAFE_FALLBACK_SCRIPT = '''
+from manim import Scene, Text
+
+class VisocodeMaxRetriesScene(Scene):
+    def construct(self):
+        self.add(Text("Generation failed after max retries."))
+        self.wait(1)
+'''
+
+
+def _compress_traceback(traceback: str, last_n_lines: int = 5) -> str:
+    """Extract last N lines + last File/line; never drop the real error line.
+
+    Executor often puts the real cause in the FIRST line (e.g. "No .mp4 under ...",
+    "Timeout (120s)"). We prepend that line + a short hint so the generator
+    always sees whether it was timeout, no output, or runtime error.
+    """
+    raw = traceback.strip()
+    lines = [s for s in raw.splitlines() if s.strip()]
+    if not lines:
+        return raw[:500]
+    # First line often is the actual error from executor — never drop it
+    first_line = lines[0].strip()[:300]
+    key_phrases = []
+    if "Timeout" in raw or "TimeoutExpired" in raw:
+        key_phrases.append("TIMEOUT: Manim ran too long; simplify the scene (fewer animations, shorter waits).")
+        if "Timeout" in first_line or "timeout" in first_line.lower():
+            key_phrases.append(f"Raw: {first_line}")
+    elif "No .mp4" in raw or "No .mp4 under" in raw:
+        key_phrases.append("NO OUTPUT: Manim did not produce a final .mp4 (crashed or only partial files); simplify or fix the scene.")
+        if "No .mp4" in first_line or "No .mp4 under" in first_line:
+            key_phrases.append(f"Raw: {first_line}")
+    if "NameError" in raw or "AttributeError" in raw:
+        key_phrases.append("RUNTIME ERROR: Missing import or wrong API; check manim imports and method names.")
+    file_line_matches = list(_FILE_LINE_RE.finditer(traceback))
+    location = ""
+    if file_line_matches:
+        m = file_line_matches[-1]
+        location = f" (at {m.group(1)!r} line {m.group(2)})"
+    tail = "\n".join(lines[-last_n_lines:])
+    body = f"{tail}{location}" if location else tail
+    if key_phrases:
+        return "\n".join(key_phrases) + "\n\n" + body
+    return body
+
 
 def _extract_code_block(text: str) -> str:
     """Return the Python source inside a markdown fence, or the raw text.
@@ -91,6 +140,8 @@ class GraphState(TypedDict):
         drive_link:     Google Drive ``webViewLink`` set by ``upload_node`` on
                        a successful upload.  Empty string if upload was skipped
                        or failed.
+        debugger_hint:  Optional diagnosis from ``debugger_node`` (only set after
+                       execution failure); consumed by ``generate_node`` then cleared.
     """
 
     user_prompt: str
@@ -100,6 +151,7 @@ class GraphState(TypedDict):
     output_path: str
     status: str
     drive_link: str
+    debugger_hint: str
 
 
 # ---------------------------------------------------------------------------
@@ -124,14 +176,16 @@ class PipelineResult:
         status:         Terminal :class:`PipelineStatus`.
         output_files:   Paths to rendered video artefacts (non-empty on success).
         total_attempts: Number of generate→audit→execute cycles that ran.
-        final_state:    The raw :class:`GraphState` dict at graph termination,
-                        useful for debugging.
+        drive_link:     Google Drive link if upload succeeded.
+        is_fallback:    True if the video is the safe fallback (max_retries reached).
+        final_state:    The raw :class:`GraphState` dict at graph termination.
     """
 
     status: PipelineStatus
     output_files: list[Path] = field(default_factory=list)
     total_attempts: int = 0
     drive_link: str = ""
+    is_fallback: bool = False
     final_state: GraphState | None = None
 
 
@@ -204,7 +258,9 @@ Your sole task is to write correct, self-contained Manim animation code.
 STRICT RULES — violating any rule causes the pipeline to reject your output:
 1. Import ONLY from the `manim` package (e.g. `from manim import Scene, Circle`).
 2. Define EXACTLY ONE class that subclasses `Scene`, `ThreeDScene`, or
-   `MovingCameraScene`.  Name it using CamelCase.
+   `MovingCameraScene`.  Name it with a descriptive CamelCase related to the
+   topic (e.g. PermutationsDemoScene, BacktrackingScene). Never use FallbackScene
+   or VisocodeMaxRetriesScene.
 3. Implement `construct(self)` with all animation logic.
 4. FORBIDDEN imports: os, sys, subprocess, pathlib, socket, urllib, requests,
    httpx, shutil.  Any of these will cause an immediate audit failure.
@@ -219,6 +275,10 @@ STRICT RULES — violating any rule causes the pipeline to reject your output:
 9. Use relative positioning (e.g. .next_to(), .align_to()) instead of absolute
    coordinates (e.g. UP * 3) so elements do not overlap and stay within screen
    bounds.
+10. Keep the scene SHORT so it renders within the timeout: total animation
+    under ~20–30 seconds. Prefer 3–5 self.play() calls total; avoid long
+    self.wait() or many sequential animations. Long scenes often hit timeouts
+    and only produce partial_movie_files, causing "No .mp4" failures.
 
 CORRECT OUTPUT FORMAT:
 ```python
@@ -233,6 +293,12 @@ class ExampleScene(Scene):
 ```
 """
 
+    _DEBUGGER_SYSTEM = """You are a debugger for Manim (math animation) Python code.
+Given the code and the error output, reply with exactly two lines:
+Line 1: DIAGNOSIS: <one short sentence: what went wrong>
+Line 2: FIX: <one short sentence: what to change>
+No code, no preamble. Only these two lines."""
+
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
@@ -243,7 +309,7 @@ class ExampleScene(Scene):
         executor: SandboxExecutor,
         working_dir: Path,
         max_retries: int = 3,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3-pro-preview",
         drive_uploader: DriveUploader | None = None,
         generator: ManimCodeGenerator | None = None,
     ) -> None:
@@ -286,6 +352,7 @@ class ExampleScene(Scene):
             "output_path": "",
             "status": "",
             "drive_link": "",
+            "debugger_hint": "",
         }
 
         _logger.info(
@@ -364,7 +431,8 @@ class ExampleScene(Scene):
 
         return {
             "current_code": code,
-            "error_message": "",    # clear any previous error
+            "error_message": "",
+            "debugger_hint": "",   # consumed; clear for next round
         }
 
     def audit_node(self, state: GraphState) -> dict[str, Any]:
@@ -384,8 +452,9 @@ class ExampleScene(Scene):
         code = state["current_code"]
         _logger.info("audit_node: running %d auditor(s)", len(self.auditors))
 
+        ctx = {"user_prompt": state["user_prompt"]}
         for auditor in self.auditors:
-            result = auditor.audit(code)
+            result = auditor.audit(code, context=ctx)
             if not result.passed:
                 reason = "; ".join(result.issues)
                 _logger.warning("audit_node: FAILED — %s", reason)
@@ -412,10 +481,10 @@ class ExampleScene(Scene):
         Returns:
             Partial state update reflecting success or failure.
         """
-        _logger.info(
-            "execute_node: launching Docker sandbox (retry_count=%d)",
-            state["retry_count"],
-        )
+        # _logger.info(
+        #     "execute_node: launching Docker sandbox (retry_count=%d)",
+        #     state["retry_count"],
+        # )
 
         outcome = self.executor.run_manim(
             state["current_code"],
@@ -453,6 +522,53 @@ class ExampleScene(Scene):
             )
 
         return updates
+
+    def debugger_node(self, state: GraphState) -> dict[str, Any]:
+        """Run after execution failure: ask LLM for a short diagnosis + fix hint.
+
+        Result is stored in *debugger_hint* and consumed by generate_node in
+        _build_feedback(); generate_node clears it after use.
+        """
+        err = (state.get("error_message") or "").strip()
+        if not err.startswith("[EXECUTE]"):
+            return {"debugger_hint": ""}
+        traceback = _compress_traceback(err[len("[EXECUTE]"):].strip(), last_n_lines=5)
+        code = state.get("current_code", "")
+
+        messages = [
+            SystemMessage(content=self._DEBUGGER_SYSTEM),
+            HumanMessage(content=f"Code:\n```python\n{code[:3000]}\n```\n\nError:\n{traceback}"),
+        ]
+        try:
+            response = self._llm.invoke(messages)
+            text = (response.content or "").strip()
+        except Exception as e:
+            _logger.warning("debugger_node: LLM call failed — %s", e)
+            return {"debugger_hint": ""}
+        if not text:
+            return {"debugger_hint": ""}
+        _logger.info("debugger_node: hint length=%d", len(text))
+        return {"debugger_hint": text[:500]}
+
+    def fallback_node(self, state: GraphState) -> dict[str, Any]:
+        """Run a minimal safe Manim script when max_retries was reached.
+
+        Renders a short fallback video so the user still gets an output.
+        On success: sets output_path, status="success", is_fallback=True.
+        On failure: sets status="max_retries_exceeded" (no video).
+        """
+        _logger.info("fallback_node: running safe fallback script")
+        outcome = self.executor.run_manim(SAFE_FALLBACK_SCRIPT, str(self.working_dir))
+
+        if outcome["status"] == "success":
+            _logger.info("fallback_node: success — %s", outcome["output_path"])
+            return {
+                "output_path": outcome["output_path"],
+                "status": "success",
+                "is_fallback": True,
+            }
+        _logger.error("fallback_node: safe script failed — %s", outcome.get("traceback", "")[:400])
+        return {"status": "max_retries_exceeded"}
 
     def upload_node(self, state: GraphState) -> dict[str, Any]:
         """Upload the rendered video to Google Drive.
@@ -526,16 +642,22 @@ class ExampleScene(Scene):
 
         if state["retry_count"] < self.max_retries:
             _logger.info(
-                "route_after_execute → generate_node (retry %d/%d)",
+                "route_after_execute → debugger_node (retry %d/%d)",
                 state["retry_count"],
                 self.max_retries,
             )
-            return "generate_node"
+            return "debugger_node"
 
         _logger.warning(
-            "route_after_execute → END (max_retries=%d exhausted)",
+            "route_after_execute → fallback_node (max_retries=%d exhausted)",
             self.max_retries,
         )
+        return "fallback_node"
+
+    def _route_after_fallback(self, state: GraphState) -> str:
+        """Route after fallback_node: upload on success, else END."""
+        if state.get("status") == "success":
+            return "upload_node"
         return END
 
     # ------------------------------------------------------------------
@@ -576,6 +698,8 @@ class ExampleScene(Scene):
         graph.add_node("generate_node", self.generate_node)
         graph.add_node("audit_node", self.audit_node)
         graph.add_node("execute_node", self.execute_node)
+        graph.add_node("debugger_node", self.debugger_node)
+        graph.add_node("fallback_node", self.fallback_node)
         graph.add_node("upload_node", self.upload_node)
 
         # ── Entry point ─────────────────────────────────────────────────────
@@ -597,15 +721,25 @@ class ExampleScene(Scene):
             },
         )
 
-        # ── Conditional edge: execute → upload | generate | END ─────────────
+        # ── Conditional edge: execute → upload | debugger | fallback ─────────
         graph.add_conditional_edges(
             "execute_node",
             self._route_after_execute,
             {
                 "upload_node": "upload_node",
-                "generate_node": "generate_node",
-                END: END,
+                "debugger_node": "debugger_node",
+                "fallback_node": "fallback_node",
             },
+        )
+
+        # ── Fixed edge: debugger → generate (retry path) ─────────────────────
+        graph.add_edge("debugger_node", "generate_node")
+
+        # ── Conditional edge: fallback → upload | END ───────────────────────
+        graph.add_conditional_edges(
+            "fallback_node",
+            self._route_after_fallback,
+            {"upload_node": "upload_node", END: END},
         )
 
         return graph.compile()
@@ -638,10 +772,12 @@ class ExampleScene(Scene):
 
         if msg.startswith("[EXECUTE]"):
             traceback = msg[len("[EXECUTE]"):].strip()
-            # Truncate very long tracebacks to avoid huge prompts
-            if len(traceback) > 2000:
-                traceback = traceback[:2000] + "\n... (truncated)"
-            return f"The Manim render failed with this traceback:\n{traceback}"
+            compressed = _compress_traceback(traceback, last_n_lines=5)
+            base = f"The Manim render failed. Fix the code using this error (last 5 lines + location):\n{compressed}"
+            hint = state.get("debugger_hint", "").strip()
+            if hint:
+                base = f"Diagnosis from debugger:\n{hint}\n\n{base}"
+            return base
 
         return msg
 
@@ -682,8 +818,8 @@ class ExampleScene(Scene):
         return PipelineResult(
             status=pipeline_status,
             output_files=self._collect_outputs(final_state),
-            # retry_count starts at 0 on the first attempt, so total = count + 1
             total_attempts=final_state.get("retry_count", 0) + 1,
             drive_link=final_state.get("drive_link", ""),
+            is_fallback=bool(final_state.get("is_fallback", False)),
             final_state=final_state,
         )

@@ -23,7 +23,7 @@ from datetime import datetime
 import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from auditor import SecurityAuditor
+from auditor import LLMJudgeAuditor, SecurityAuditor
 from executor import LocalExecutor, SandboxExecutor
 from generator import ManimCodeGenerator, SceneDescription, SceneComplexity
 from orchestrator import PipelineStatus, WorkflowOrchestrator
@@ -147,6 +147,7 @@ def _append_run(
 ) -> None:
     _WORKING_DIR.mkdir(parents=True, exist_ok=True)
     runs = _load_runs()
+    first_try = status == "success" and attempts == 1
     runs.insert(
         0,
         {
@@ -156,11 +157,26 @@ def _append_run(
             "video_path": video_path or "",
             "drive_link": drive_link,
             "attempts": attempts,
+            "first_try": first_try,
         },
     )
-    runs = runs[:100]  # 只保留最近 100 条
+    runs = runs[:100]
     with open(_RUNS_FILE, "w", encoding="utf-8") as f:
         json.dump(runs, f, ensure_ascii=False, indent=2)
+
+
+def _through_rate_stats(runs: list[dict]) -> dict:
+    """From runs list compute: total, first_try_success count, rate (0–1)."""
+    total = len(runs)
+    first_try = sum(
+        1 for r in runs
+        if r.get("first_try", r.get("status") == "success" and r.get("attempts") == 1)
+    )
+    return {
+        "total": total,
+        "first_try_success": first_try,
+        "rate": (first_try / total) if total else 0.0,
+    }
 
 _STYLE_PRESETS: dict[str, str] = {
     "Minimalist Dark": (
@@ -243,8 +259,9 @@ def _init_state() -> None:
         "last_video_path": None,
         "last_drive_link": "",
         "script_input": "",
-        "last_run_status": "",   # PipelineStatus.value or "" — 用于 rerun 后仍显示「渲染失败」
-        "last_run_error": "",    # 渲染/执行失败时的错误信息
+        "last_run_status": "",
+        "last_run_error": "",
+        "last_run_is_fallback": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -268,7 +285,7 @@ def _build_orchestrator(
     executor = LocalExecutor() if use_local_manim else SandboxExecutor()
     orc = WorkflowOrchestrator(
         generator=ManimCodeGenerator(),
-        auditors=[SecurityAuditor()],
+        auditors=[SecurityAuditor(), LLMJudgeAuditor()],
         executor=executor,
         working_dir=_WORKING_DIR,
         max_retries=3,
@@ -304,7 +321,7 @@ with st.sidebar:
     st.markdown("### Model Settings")
     model_name = st.selectbox(
         "LLM Model",
-        ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
+        ["gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
         index=0,
     )
     temperature = st.slider(
@@ -549,6 +566,9 @@ if generate_btn:
                 st.session_state.last_video_path = video_path
                 st.session_state.last_drive_link = pipeline_result.drive_link
                 st.session_state.last_run_error = ""
+                st.session_state.last_run_is_fallback = getattr(
+                    pipeline_result, "is_fallback", False
+                )
 
                 _append_run(
                     user_script,
@@ -575,6 +595,7 @@ if generate_btn:
                 st.session_state.history = st.session_state.history[:3]
 
             else:
+                st.session_state.last_run_is_fallback = False
                 error_msg = final_state.get(
                     "error_message", "No error detail available."
                 )
@@ -620,6 +641,8 @@ if st.session_state.last_video_path:
     if video_path_obj.exists():
         st.markdown('<div class="video-wrap">', unsafe_allow_html=True)
         st.video(str(video_path_obj))
+        if st.session_state.get("last_run_is_fallback"):
+            st.caption("降级视频（生成已达最大重试次数）")
         st.markdown("</div>", unsafe_allow_html=True)
 
         link_col, dl_col = st.columns([3, 1])
@@ -684,9 +707,16 @@ if st.session_state.history:
 # ── 运行记录（持久到 runs.json，关掉前端再打开也能看）────────────────────────────
 st.markdown("---")
 st.markdown("### 运行记录")
-st.caption("每次生成都会写入本地，关闭浏览器后再打开仍可从这里查看结果。")
-st.caption(f"记录文件: **`{_RUNS_FILE}`**")
 runs = _load_runs()
+if runs:
+    stats = _through_rate_stats(runs)
+    st.caption(
+        f"一次通过率（首轮即成功）: **{stats['first_try_success']}/{stats['total']}** "
+        f"({100 * stats['rate']:.0f}%)  |  记录文件: `{_RUNS_FILE}`"
+    )
+else:
+    st.caption(f"记录文件: **`{_RUNS_FILE}`**")
+st.caption("每次生成都会写入本地，关闭浏览器后再打开仍可从这里查看结果。")
 if not runs:
     st.info("暂无记录。生成一次视频（成功或失败）后这里会列出时间、描述、状态与链接。请点一次「Generate Video」后刷新。")
 else:

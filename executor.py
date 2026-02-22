@@ -425,7 +425,7 @@ class LocalExecutor(BaseExecutor):
     Same run_manim(code_string, output_dir) -> dict contract as SandboxExecutor.
     """
 
-    DEFAULT_TIMEOUT: int = 120
+    DEFAULT_TIMEOUT: int = 180  # 场景稍长时避免 120s 超时只出 partial
 
     def __init__(self, timeout: int = DEFAULT_TIMEOUT) -> None:
         self.timeout = timeout
