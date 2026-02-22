@@ -1,0 +1,12 @@
+python-dotenv>=1.0.0
+streamlit>=1.28.0
+langchain-google-genai>=2.0.0
+langchain-core>=0.3.0
+langgraph>=0.2.0
+docker>=7.0.0
+google-api-python-client>=2.100.0
+google-auth>=2.25.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+
+# For --local execution (no Docker): pip install manim

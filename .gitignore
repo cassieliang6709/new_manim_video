@@ -1,0 +1,6 @@
+.env
+token.json
+client_secrets.json
+credentials.json
+__pycache__/
+manim_output/
