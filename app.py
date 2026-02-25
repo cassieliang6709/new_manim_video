@@ -126,8 +126,8 @@ st.markdown(
 _WORKING_DIR = _PROJECT_ROOT / "manim_output"
 _RUNS_FILE = _WORKING_DIR / "runs.json"
 _CREDENTIALS_PATH = str(_PROJECT_ROOT / "credentials.json")
-_TOKEN_PATH = _PROJECT_ROOT / "token.json"  # OAuth 一次授权后生成，个人 Gmail 用
-_DRIVE_FOLDER_ID = "1Jc5ARFYeGSspHkd6ED9psYNX_hnl1lbt"  # 写死：生成成功即上传到此文件夹
+_TOKEN_PATH = _PROJECT_ROOT / "token.json"  # Generated after first OAuth authorization (personal Gmail)
+_DRIVE_FOLDER_ID = "1Jc5ARFYeGSspHkd6ED9psYNX_hnl1lbt"  # Hardcoded target folder — uploads here on success
 
 
 def _load_runs() -> list[dict]:
@@ -361,25 +361,25 @@ with st.sidebar:
         value=False,
         help="Run manim on this machine. Requires: pip install manim.",
     )
-    st.caption("✅ 生成成功后将上传到 Google Drive（固定文件夹）")
+    st.caption("✅ Uploads to Google Drive automatically on success.")
 
     st.divider()
 
-    # Pipeline info (前后端一体：点「Generate」后流水线在本进程内执行)
+    # Pipeline info (single-process: pipeline runs inside this Streamlit app)
     st.markdown("### Pipeline")
     exec_label = "Local Manim" if use_local_manim else "Docker (Manim)"
     st.caption(f"Executor: **{exec_label}**")
     st.caption(f"Working dir: `{_WORKING_DIR}`")
     has_key = bool(os.environ.get("GOOGLE_API_KEY"))
     st.caption(f"API key: **{'loaded' if has_key else 'not set'}" + (" ⚠️" if not has_key else ""))
-    # 勾选本地 Manim 时显示当前进程能否找到 manim/ffmpeg（与启动 Streamlit 的终端 PATH 一致）
+    # When local Manim is selected, check if manim/ffmpeg are in PATH (same terminal as Streamlit)
     if use_local_manim:
         manim_path = shutil.which("manim")
         ffmpeg_path = shutil.which("ffmpeg")
         st.caption(f"manim: **{'✓ ' + manim_path if manim_path else '✗ not in PATH'}**")
         st.caption(f"ffmpeg: **{'✓ ' + ffmpeg_path if ffmpeg_path else '✗ not in PATH'}**")
         if not manim_path or not ffmpeg_path:
-            st.caption("💡 从「能跑 manim」的同一终端启动: `streamlit run app.py`")
+            st.caption("💡 Launch from the same terminal where `manim` works: `streamlit run app.py`")
     st.markdown("### About")
     st.info(
         f"Gemini → LangGraph → Audit → {exec_label} → Drive",
@@ -462,13 +462,13 @@ if generate_btn:
             complexity=SceneComplexity.MODERATE,
         )
 
-        # Drive 上传：优先 OAuth（个人 Gmail），否则服务账号
+        # Drive upload: prefer OAuth (personal Gmail), fall back to service account
         drive_uploader: DriveUploader | DriveUploaderOAuth | None = None
         if _TOKEN_PATH.exists():
             try:
                 drive_uploader = DriveUploaderOAuth(str(_TOKEN_PATH), _DRIVE_FOLDER_ID)
             except Exception as exc:
-                st.warning(f"Drive OAuth 加载失败: {exc}")
+                st.warning(f"Drive OAuth failed to load: {exc}")
         if drive_uploader is None:
             try:
                 drive_uploader = DriveUploader(
@@ -476,7 +476,7 @@ if generate_btn:
                     folder_id=_DRIVE_FOLDER_ID,
                 )
             except Exception as exc:
-                st.warning(f"Drive 服务账号加载失败（需 credentials.json 或先运行 script/authorize_drive.py）: {exc}")
+                st.warning(f"Drive service account failed to load (need credentials.json or run script/authorize_drive.py first): {exc}")
 
         # Set up log capture
         captured_logs: list[tuple[str, str]] = []
@@ -620,7 +620,7 @@ st.markdown("### Output")
 last_status = st.session_state.get("last_run_status", "")
 last_error = st.session_state.get("last_run_error", "")
 
-# 上次未成功：在 Output 区持久显示原因（rerun 后仍可见）
+# Last run failed: show reason persistently in Output section (survives rerun)
 if last_status and last_status != "success":
     if st.session_state.current_code:
         st.warning(
@@ -639,7 +639,7 @@ if st.session_state.last_video_path:
         st.markdown('<div class="video-wrap">', unsafe_allow_html=True)
         st.video(str(video_path_obj))
         if st.session_state.get("last_run_is_fallback"):
-            st.caption("降级视频（生成已达最大重试次数）")
+            st.caption("Fallback video (max retries reached — generation failed)")
         st.markdown("</div>", unsafe_allow_html=True)
 
         link_col, dl_col = st.columns([3, 1])
@@ -701,28 +701,28 @@ if st.session_state.history:
                 st.caption("No Drive link")
 
 
-# ── 运行记录（持久到 runs.json，关掉前端再打开也能看）────────────────────────────
+# ── Run History (persisted to runs.json, visible after browser refresh) ──────
 st.markdown("---")
-st.markdown("### 运行记录")
+st.markdown("### Run History")
 runs = _load_runs()
 if runs:
     stats = _through_rate_stats(runs)
     st.caption(
-        f"一次通过率（首轮即成功）: **{stats['first_try_success']}/{stats['total']}** "
-        f"({100 * stats['rate']:.0f}%)  |  记录文件: `{_RUNS_FILE}`"
+        f"First-try success rate: **{stats['first_try_success']}/{stats['total']}** "
+        f"({100 * stats['rate']:.0f}%)  |  Log file: `{_RUNS_FILE}`"
     )
 else:
-    st.caption(f"记录文件: **`{_RUNS_FILE}`**")
-st.caption("每次生成都会写入本地，关闭浏览器后再打开仍可从这里查看结果。")
+    st.caption(f"Log file: **`{_RUNS_FILE}`**")
+st.caption("Every run is saved locally — results persist after closing the browser.")
 if not runs:
-    st.info("暂无记录。生成一次视频（成功或失败）后这里会列出时间、描述、状态与链接。请点一次「Generate Video」后刷新。")
+    st.info("No runs yet. Generate a video (success or failure) and it will appear here.")
 else:
     for r in runs[:30]:
         ts = r.get("ts", "")[:19].replace("T", " ")
-        st.markdown(f"**{ts}** — {r.get('status', '')}（{r.get('attempts', 0)} 次尝试）")
+        st.markdown(f"**{ts}** — {r.get('status', '')} ({r.get('attempts', 0)} attempt(s))")
         st.caption(r.get("prompt", "")[:120])
         if r.get("drive_link"):
-            st.markdown(f"[📁 打开 Drive]({r['drive_link']})")
+            st.markdown(f"[📁 Open on Drive]({r['drive_link']})")
         if r.get("video_path") and Path(r["video_path"]).exists():
-            st.caption(f"本地: `{r['video_path']}`")
+            st.caption(f"Local: `{r['video_path']}`")
         st.divider()
