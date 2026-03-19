@@ -5,6 +5,8 @@ Defines the base CodeAuditor abstract class, SecurityAuditor, and LLMJudgeAudito
 for validating and auditing generated Manim code before execution.
 """
 
+from __future__ import annotations
+
 import ast
 import os
 import re

@@ -29,7 +29,15 @@ from auditor import LLMJudgeAuditor, SecurityAuditor
 from executor import LocalExecutor, SandboxExecutor
 from generator import SceneDescription, SceneComplexity
 from orchestrator import PipelineStatus, WorkflowOrchestrator
-from uploader import DriveUploader, DriveUploaderOAuth
+
+# ── Early API key check (prevents DefaultCredentialsError on first load) ──────
+if not os.environ.get("GOOGLE_API_KEY"):
+    st.warning(
+        "⚠️  **GOOGLE_API_KEY not set.** "
+        "Copy `.env.example` → `.env` and fill in your key to enable video generation. "
+        "Demo videos still work without a key.",
+        icon="🔑",
+    )
 
 # ── Page configuration ───────────────────────────────────────────────────────
 st.set_page_config(
@@ -125,9 +133,18 @@ st.markdown(
 # ── Constants ─────────────────────────────────────────────────────────────────
 _WORKING_DIR = _PROJECT_ROOT / "manim_output"
 _RUNS_FILE = _WORKING_DIR / "runs.json"
-_CREDENTIALS_PATH = str(_PROJECT_ROOT / "credentials.json")
-_TOKEN_PATH = _PROJECT_ROOT / "token.json"  # Generated after first OAuth authorization (personal Gmail)
-_DRIVE_FOLDER_ID = "1Jc5ARFYeGSspHkd6ED9psYNX_hnl1lbt"  # Hardcoded target folder — uploads here on success
+_DEMOS_JSON = _PROJECT_ROOT / "manim_output" / "demos" / "demos.json"
+
+
+def _load_demos() -> dict:
+    """Load pre-generated demo video index."""
+    if not _DEMOS_JSON.exists():
+        return {}
+    try:
+        with open(_DEMOS_JSON, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def _load_runs() -> list[dict]:
@@ -266,6 +283,8 @@ def _init_state() -> None:
         "last_run_status": "",
         "last_run_error": "",
         "last_run_is_fallback": False,
+        "demo_video_path": None,   # pre-generated demo selected by template button
+        "demo_title": "",
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -281,7 +300,6 @@ def _build_orchestrator(
     model_name: str,
     temperature: float,
     top_p: float,
-    drive_uploader: DriveUploader | DriveUploaderOAuth | None,
     use_local_manim: bool = False,
 ) -> WorkflowOrchestrator:
     """Construct a WorkflowOrchestrator with UI settings passed through constructor."""
@@ -295,7 +313,6 @@ def _build_orchestrator(
         model_name=model_name,
         temperature=temperature,
         top_p=top_p,
-        drive_uploader=drive_uploader,
     )
 
 
@@ -361,7 +378,7 @@ with st.sidebar:
         value=False,
         help="Run manim on this machine. Requires: pip install manim.",
     )
-    st.caption("✅ Uploads to Google Drive automatically on success.")
+    st.caption("Videos saved locally to the working directory.")
 
     st.divider()
 
@@ -371,7 +388,7 @@ with st.sidebar:
     st.caption(f"Executor: **{exec_label}**")
     st.caption(f"Working dir: `{_WORKING_DIR}`")
     has_key = bool(os.environ.get("GOOGLE_API_KEY"))
-    st.caption(f"API key: **{'loaded' if has_key else 'not set'}" + (" ⚠️" if not has_key else ""))
+    st.caption(f"API key: **{'loaded' if has_key else 'not set'}**" + (" ⚠️" if not has_key else ""))
     # When local Manim is selected, check if manim/ffmpeg are in PATH (same terminal as Streamlit)
     if use_local_manim:
         manim_path = shutil.which("manim")
@@ -382,7 +399,7 @@ with st.sidebar:
             st.caption("💡 Launch from the same terminal where `manim` works: `streamlit run app.py`")
     st.markdown("### About")
     st.info(
-        f"Gemini → LangGraph → Audit → {exec_label} → Drive",
+        f"Gemini → LangGraph → Audit → {exec_label}",
         icon="⚙️",
     )
 
@@ -395,12 +412,23 @@ with left_col:
     st.markdown("### Script Input")
 
     # Quick template buttons — 2-column grid
-    st.caption("Quick Templates")
+    st.caption("Quick Templates  ·  click to preview pre-generated demo")
+    _demos = _load_demos()
     btn_cols = st.columns(2)
     for idx, (label, prompt) in enumerate(_QUICK_TEMPLATES.items()):
         with btn_cols[idx % 2]:
             if st.button(label, use_container_width=True, key=f"tpl_{idx}"):
                 st.session_state.script_input = prompt
+                # Load pre-generated demo video if available
+                demo = _demos.get(label)
+                if demo:
+                    demo_path = _PROJECT_ROOT / demo["video"]
+                    if demo_path.exists():
+                        st.session_state.demo_video_path = str(demo_path)
+                        st.session_state.demo_title = label
+                    else:
+                        st.session_state.demo_video_path = None
+                        st.session_state.demo_title = ""
                 st.rerun()
 
     # Main textarea — key binds it to session_state.script_input
@@ -425,7 +453,16 @@ with left_col:
 # ── Right Column: Director's Monitor ─────────────────────────────────────────
 with right_col:
     st.markdown("### Director's Monitor")
-    scripting_tab, thought_tab = st.tabs(["Live Scripting", "Thought Process"])
+    demo_tab, scripting_tab, thought_tab = st.tabs(["Demo Preview", "Live Scripting", "Thought Process"])
+
+    with demo_tab:
+        demo_path = st.session_state.get("demo_video_path")
+        demo_title = st.session_state.get("demo_title", "")
+        if demo_path and Path(demo_path).exists():
+            st.caption(f"Pre-generated demo: **{demo_title}**")
+            st.video(demo_path)
+        else:
+            st.info("Click a Quick Template to preview its pre-generated demo video.")
 
     with scripting_tab:
         if st.session_state.current_code:
@@ -462,22 +499,6 @@ if generate_btn:
             complexity=SceneComplexity.MODERATE,
         )
 
-        # Drive upload: prefer OAuth (personal Gmail), fall back to service account
-        drive_uploader: DriveUploader | DriveUploaderOAuth | None = None
-        if _TOKEN_PATH.exists():
-            try:
-                drive_uploader = DriveUploaderOAuth(str(_TOKEN_PATH), _DRIVE_FOLDER_ID)
-            except Exception as exc:
-                st.warning(f"Drive OAuth failed to load: {exc}")
-        if drive_uploader is None:
-            try:
-                drive_uploader = DriveUploader(
-                    credentials_path=_CREDENTIALS_PATH,
-                    folder_id=_DRIVE_FOLDER_ID,
-                )
-            except Exception as exc:
-                st.warning(f"Drive service account failed to load (need credentials.json or run script/authorize_drive.py first): {exc}")
-
         # Set up log capture
         captured_logs: list[tuple[str, str]] = []
         log_handler = _ListHandler(captured_logs)
@@ -499,7 +520,6 @@ if generate_btn:
                 model_name=model_name,
                 temperature=temperature,
                 top_p=top_p,
-                drive_uploader=drive_uploader,
                 use_local_manim=use_local_manim,
             )
 
@@ -519,8 +539,6 @@ if generate_btn:
                     if pipeline_result.status == PipelineStatus.SUCCESS:
                         st.write("Compiling Manim Code — audit passed, code is safe.")
                         st.write("Rendering Frames — Docker sandbox complete.")
-                        if pipeline_result.drive_link:
-                            st.write("Uploading to Cloud — Google Drive upload complete.")
                         status.update(
                             label="Video Ready!", state="complete", expanded=False
                         )
@@ -560,7 +578,7 @@ if generate_btn:
                     else None
                 )
                 st.session_state.last_video_path = video_path
-                st.session_state.last_drive_link = pipeline_result.drive_link
+                st.session_state.last_drive_link = ""
                 st.session_state.last_run_error = ""
                 st.session_state.last_run_is_fallback = getattr(
                     pipeline_result, "is_fallback", False
@@ -570,7 +588,7 @@ if generate_btn:
                     user_script,
                     pipeline_result.status.value,
                     video_path=video_path,
-                    drive_link=pipeline_result.drive_link or "",
+                    drive_link="",
                     attempts=pipeline_result.total_attempts,
                     code=st.session_state.current_code,  # persisted for RAG
                 )
@@ -583,7 +601,7 @@ if generate_btn:
                         else user_script
                     ),
                     "video_path": video_path,
-                    "drive_link": pipeline_result.drive_link,
+                    "drive_link": "",
                     "code": st.session_state.current_code,
                     "timestamp": datetime.now().strftime("%H:%M  %d %b"),
                     "attempts": pipeline_result.total_attempts,

@@ -440,10 +440,10 @@ elif idx == 3:
             """\
 class GraphState(TypedDict):
     user_prompt:       str
-    generated_code:    str
-    audit_result:      str   # PASS | FAIL
+    current_code:      str
+    error_message:     str   # empty = no error
     audit_retry_count: int   # circuit breaker
-    execution_result:  dict
+    retry_count:       int
     debugger_hint:     str
     output_path:       str
     is_fallback:       bool""",

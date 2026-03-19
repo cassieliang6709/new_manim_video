@@ -5,6 +5,7 @@ client_secrets.json
 credentials.json
 
 # Python
+.venv/
 __pycache__/
 *.pyc
 *.pyo
