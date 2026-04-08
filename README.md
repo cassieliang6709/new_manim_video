@@ -4,7 +4,7 @@
 
 Visocode is a production-grade AI pipeline that transforms plain English descriptions into rendered mathematical animation videos (`.mp4`). It combines **LangGraph** agentic orchestration, **dual-layer code auditing**, **Docker sandbox isolation**, **two-tier RAG**, and **Google Drive auto-upload** — with automatic self-correction when generation fails.
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
 ![LangGraph](https://img.shields.io/badge/LangGraph-agentic%20DAG-orange)
 ![Gemini](https://img.shields.io/badge/LLM-Gemini%202.5%20Pro%2FFlash-green)
 ![Streamlit](https://img.shields.io/badge/UI-Streamlit-red)
@@ -87,6 +87,7 @@ User types: "Visualize Fibonacci as a growing bar chart"
 | **First-try success tracking** | Persisted to `runs.json`, displayed in sidebar |
 | **Fallback scene** | Safe minimal animation rendered when max retries exceeded |
 | **CLI mode** | `python run.py generate "description"` plus template/style/preferences commands |
+| **MCP-ready interface** | Optional `mcp_server.py` exposes generation, templates, styles, and preferences |
 | **VPS one-command deploy** | `bash deploy.sh` on any Linux VPS with Docker |
 
 ---
@@ -102,6 +103,7 @@ User types: "Visualize Fibonacci as a growing bar chart"
 | RAG — few-shot | `sentence-transformers` `all-MiniLM-L6-v2` over `runs.json` |
 | RAG — API lookup | Hand-curated `manim_api_index.json` (57 entries) |
 | UI | Streamlit |
+| Optional integration layer | MCP (`mcp.server.fastmcp`) |
 | Cloud storage | Google Drive API v3 (OAuth 2.0 + service account) |
 | Container runtime | Docker Engine + Docker-in-Docker via socket mount |
 
@@ -147,7 +149,9 @@ visocode/
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.9+ for the main pipeline
+- Python 3.10+ if you also want to install and run the optional `mcp` server
+- Python 3.11+ recommended for a fresh setup
 - Docker Desktop (running)
 - [Gemini API key](https://aistudio.google.com/apikey)
 - (Optional) Google Cloud project with Drive API enabled, for video upload
@@ -200,6 +204,19 @@ streamlit run app.py
 # → http://localhost:8501
 ```
 
+### 4. Optional MCP Server
+
+If you want to expose Visocode as an MCP server, install `mcp` in an environment
+running Python 3.10+ and start:
+
+```bash
+python mcp_server.py
+```
+
+Notes:
+- The current project `.venv` in this repo may still be Python 3.9, which is enough for the main generate pipeline but not for `mcp` package installation.
+- The MCP entrypoint is optional; the Streamlit UI and CLI work without it.
+
 ---
 
 ## Usage
@@ -234,9 +251,40 @@ python run.py list-styles
 python run.py prefs get
 python run.py prefs set '{"style":{"preset":"classic_blackboard"}}'
 
+# Search templates
+python run.py search-templates bubble
+
 # Use local Manim instead of Docker
 python run.py generate "Pythagorean theorem" --local
 ```
+
+### MCP
+
+`mcp_server.py` exposes these tool groups:
+
+- `generate_animation_tool`
+- `list_templates_tool` / `get_template_tool` / `search_templates_tool`
+- `list_styles_tool`
+- `get_preferences_tool` / `set_preferences_tool`
+
+All generation requests still run through the existing audited orchestrator. The MCP layer is only an interface wrapper; it does not bypass audit, retry, sandbox, or fallback behavior.
+
+## Verification
+
+The current implementation was validated in two ways:
+
+- Offline verification:
+  - `python3 -m unittest test_service_api.py`
+  - `python3 run.py list-templates`
+  - `python3 run.py list-styles`
+- End-to-end generation:
+  - `./.venv/bin/python run.py generate "Create a very short animation: show a blue circle, write the text hello, and stop." --output-dir /tmp/manim_e2e_test`
+  - Result: success on the first attempt, producing `SimpleCircleAndTextScene.mp4`
+
+Known environment note:
+
+- The main pipeline currently runs successfully in the repo's existing `.venv`.
+- Installing `mcp[cli]` may require moving the project to Python 3.10+ if your local virtualenv is still Python 3.9.
 
 ### Benchmark / Reliability Evals
 
