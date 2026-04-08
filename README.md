@@ -86,7 +86,7 @@ User types: "Visualize Fibonacci as a growing bar chart"
 | **Google Drive upload** | Public "view-only" link auto-generated after render |
 | **First-try success tracking** | Persisted to `runs.json`, displayed in sidebar |
 | **Fallback scene** | Safe minimal animation rendered when max retries exceeded |
-| **CLI mode** | `python run.py "description"` — no UI required |
+| **CLI mode** | `python run.py generate "description"` plus template/style/preferences commands |
 | **VPS one-command deploy** | `bash deploy.sh` on any Linux VPS with Docker |
 
 ---
@@ -116,9 +116,17 @@ visocode/
 ├── executor.py              # SandboxExecutor (Docker) + LocalExecutor (subprocess)
 ├── auditor.py               # SecurityAuditor (AST) + LLMJudgeAuditor (Gemini Flash)
 ├── generator.py             # Data structures: SceneDescription, GeneratedCode
+├── service_api.py           # Reusable facade for UI / CLI / MCP entrypoints
+├── style_catalog.py         # Shared visual style presets
+├── preferences.py           # Saved user preferences (JSON)
+├── template_library.py      # Curated template registry + search
+├── input_processing.py      # Input classification / normalization helpers
+├── export_tools.py          # Optional ffmpeg export helpers
+├── mcp_server.py            # Optional MCP server entry point
 ├── retriever.py             # RunsRetriever (few-shot) + ApiLookup (error-driven)
 ├── uploader.py              # DriveUploader (service acct) + DriveUploaderOAuth (personal)
 ├── run.py                   # CLI entry point
+├── animation_templates/     # Curated starter templates
 ├── manim_api_index.json     # Hand-curated Manim API reference (57 entries)
 ├── deploy.sh                # One-command VPS deployment script
 ├── Dockerfile               # App container (python:3.11-slim + Streamlit)
@@ -211,15 +219,42 @@ streamlit run app.py
 export GEMINI_API_KEY=your_key
 
 # Basic usage
-python run.py "Visualize bubble sort step by step"
+python run.py generate "Visualize bubble sort step by step"
 
-# With Drive upload and custom retry limit
-python run.py "Show Fourier series approximation" \
-  --folder-id YOUR_DRIVE_FOLDER_ID \
-  --max-retries 3
+# List curated templates
+python run.py list-templates
 
-# Use local Manim instead of Docker (requires: pip install manim)
-python run.py "Pythagorean theorem" --local
+# Inspect one template
+python run.py show-template geometry/pythagorean
+
+# List style presets
+python run.py list-styles
+
+# Read / update saved preferences
+python run.py prefs get
+python run.py prefs set '{"style":{"preset":"classic_blackboard"}}'
+
+# Use local Manim instead of Docker
+python run.py generate "Pythagorean theorem" --local
+```
+
+### Benchmark / Reliability Evals
+
+Run the built-in benchmark suite:
+
+```bash
+python evals/run_benchmark.py
+```
+
+This writes:
+
+- `evals/results/<timestamp>/results.json` — one record per prompt
+- `evals/results/<timestamp>/summary.json` — aggregate reliability metrics
+
+To summarize existing app history from `runs.json`:
+
+```bash
+python evals/summarize_runs.py manim_output/runs.json
 ```
 
 ---

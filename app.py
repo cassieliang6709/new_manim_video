@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import shutil
 import traceback
 from datetime import datetime
@@ -25,10 +26,15 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 import streamlit as st
 
-from auditor import LLMJudgeAuditor, SecurityAuditor
-from executor import LocalExecutor, SandboxExecutor
-from generator import SceneDescription, SceneComplexity
-from orchestrator import PipelineStatus, WorkflowOrchestrator
+from generator import SceneComplexity
+from orchestrator import PipelineStatus
+from service_api import (
+    GenerationRequest,
+    build_orchestrator,
+    generate_animation,
+    list_templates,
+)
+from style_catalog import PRESETS, get_style
 
 # ── Early API key check (prevents DefaultCredentialsError on first load) ──────
 if not os.environ.get("GOOGLE_API_KEY"):
@@ -199,59 +205,80 @@ def _through_rate_stats(runs: list[dict]) -> dict:
         "rate": (first_try / total) if total else 0.0,
     }
 
-_STYLE_PRESETS: dict[str, str] = {
-    "Minimalist Dark": (
-        "\n\nVISUAL STYLE DIRECTIVE — Minimalist Dark:\n"
-        "- Background: pure black (#000000).\n"
-        "- Text / main elements: white (#FFFFFF).\n"
-        "- Accent: muted gray (#888888) for secondary elements.\n"
-        "- Animations: FadeIn / FadeOut, slow and deliberate (wait >= 1 s).\n"
-        "- Absolutely no decorative geometry — let the content speak.\n"
-        "- Prefer Write() for text and Create() for shapes.\n"
-    ),
-    "Classic Blackboard": (
-        "\n\nVISUAL STYLE DIRECTIVE — Classic Blackboard:\n"
-        "- Background: dark green (#1a4a2e) to evoke a chalkboard.\n"
-        "- Text: cream-white (#F5F5DC) as chalk strokes.\n"
-        "- Use Write() for all text, DrawBorderThenFill() for shapes.\n"
-        "- Colours: soft yellow, chalk pink, and light blue — like colored chalk.\n"
-        "- Use Text() for equations (no LaTeX/MathTex); animate them as if handwritten.\n"
-        "- Pacing: moderate (wait ~0.8 s between steps).\n"
-    ),
-    "Futuristic Tech": (
-        "\n\nVISUAL STYLE DIRECTIVE — Futuristic Tech:\n"
-        "- Background: very dark navy (#050A1A).\n"
-        "- Primary accent: electric cyan (#00FFFF).\n"
-        "- Secondary accents: purple (#7B2FBE) and hot pink (#FF006E).\n"
-        "- Animations: GrowFromCenter(), Create() — fast and energetic.\n"
-        "- Shorten wait() calls (0.3 – 0.5 s) for a rapid, dynamic feel.\n"
-        "- Math elements should look like holographic read-outs.\n"
-    ),
+_STYLE_OPTIONS = {preset.display_name: preset.name for preset in PRESETS.values()}
+_QUICK_TEMPLATES: dict[str, str] = {
+    item["title"]: item["description"]
+    for item in list_templates()
+    if item["id"] in {
+        "geometry/pythagorean",
+        "cs/bubble_sort",
+        "calculus/fourier_series",
+        "algebra/gradient_descent",
+    }
 }
 
-_QUICK_TEMPLATES: dict[str, str] = {
-    "Pythagorean Theorem": (
-        "Explain and visualize the Pythagorean theorem (a^2 + b^2 = c^2). "
-        "Show a right triangle with labeled sides a, b, c, then animate squares "
-        "growing on each side to prove why a^2 + b^2 = c^2. End with the formula."
-    ),
-    "Bubble Sort": (
-        "Visualize Bubble Sort on an array of 6 numbers. "
-        "Represent elements as vertical bars of different heights. "
-        "Highlight the pair being compared, animate swaps with smooth movement, "
-        "and show the fully sorted array with a success animation at the end."
-    ),
-    "Fourier Series": (
-        "Demonstrate how a Fourier series approximates a square wave. "
-        "Start with the fundamental frequency and add harmonics one by one, "
-        "showing how the superposition converges. Label each harmonic n=1,3,5..."
-    ),
-    "Gradient Descent": (
-        "Visualize gradient descent on a 2D parabolic loss curve. "
-        "Show a dot rolling down the curve, arrows indicating gradient direction, "
-        "and annotate each step with the learning-rate update rule."
-    ),
-}
+
+_RANDOM_PROMPTS: list[str] = [
+    "Visualize the binary search algorithm on a sorted array of 10 numbers. "
+    "Show the left, right, and mid pointers moving, highlight the target element, "
+    "and animate the search narrowing down step by step.",
+
+    "Animate the unit circle with a point moving around it. "
+    "Show sine and cosine values updating in real time as the angle increases from 0 to 2π. "
+    "Draw the sine and cosine waves being traced out simultaneously.",
+
+    "Demonstrate the concept of limits: show f(x) = sin(x)/x approaching 1 as x → 0. "
+    "Plot the curve, animate a point sliding toward x=0 from both sides, "
+    "and display the value converging to 1.",
+
+    "Visualize matrix multiplication of two 2×2 matrices step by step. "
+    "Highlight the row and column being multiplied, show the dot product calculation, "
+    "and fill in each result cell one by one.",
+
+    "Show how a linked list works: animate inserting nodes at the head and tail, "
+    "draw arrows between nodes, and demonstrate deleting a middle node "
+    "by redirecting the pointer.",
+
+    "Visualize the Tower of Hanoi puzzle with 3 disks. "
+    "Animate each move clearly, label the three pegs A, B, C, "
+    "and show the disk count decreasing with each recursive call.",
+
+    "Animate how RGB color mixing works. Show three overlapping circles "
+    "in red, green, and blue, highlight the additive mixing regions "
+    "(yellow, cyan, magenta, white), and label each blend.",
+
+    "Visualize the concept of Big-O notation. Plot O(1), O(log n), O(n), O(n log n), "
+    "and O(n²) curves on the same axes. Label each curve and animate them "
+    "growing as n increases from 1 to 20.",
+
+    "Show the Fibonacci sequence: animate bars or circles growing for each term, "
+    "display the recurrence relation F(n) = F(n-1) + F(n-2), "
+    "and highlight the golden ratio as the sequence grows.",
+
+    "Demonstrate how a stack data structure works with push and pop operations. "
+    "Visualize 5 elements being pushed one by one, then pop them in reverse order, "
+    "labeling each operation and showing the top pointer.",
+
+    "Visualize Newton's method for finding square root of 2. "
+    "Plot y=x² and y=2, show the tangent line at each iteration, "
+    "animate the x-intercept converging to √2.",
+
+    "Show how merge sort divides and conquers an array of 8 elements. "
+    "Animate the split phase top-down, then the merge phase bottom-up, "
+    "with color coding for sorted vs unsorted segments.",
+
+    "Visualize the dot product of two 2D vectors geometrically. "
+    "Draw two vectors, project one onto the other, "
+    "show how the angle between them affects the result, label the formula.",
+
+    "Animate the Pascal's Triangle being built row by row up to row 8. "
+    "Highlight how each number is the sum of the two above it, "
+    "then color the odd numbers to reveal the Sierpinski triangle pattern.",
+
+    "Show how a Caesar cipher works: animate each letter of 'HELLO' "
+    "shifting by 3 positions in the alphabet, display the encoded result, "
+    "then reverse the process to decode it.",
+]
 
 
 # ── Logging capture helper ────────────────────────────────────────────────────
@@ -295,26 +322,6 @@ _init_state()
 
 
 # ── Orchestrator factory ──────────────────────────────────────────────────────
-
-def _build_orchestrator(
-    model_name: str,
-    temperature: float,
-    top_p: float,
-    use_local_manim: bool = False,
-) -> WorkflowOrchestrator:
-    """Construct a WorkflowOrchestrator with UI settings passed through constructor."""
-    _WORKING_DIR.mkdir(parents=True, exist_ok=True)
-    executor = LocalExecutor() if use_local_manim else SandboxExecutor()
-    return WorkflowOrchestrator(
-        auditors=[SecurityAuditor(), LLMJudgeAuditor()],
-        executor=executor,
-        working_dir=_WORKING_DIR,
-        max_retries=3,
-        model_name=model_name,
-        temperature=temperature,
-        top_p=top_p,
-    )
-
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown(
@@ -360,14 +367,10 @@ with st.sidebar:
 
     # Visual style preset
     st.markdown("### Visual Style")
-    style_preset = st.selectbox("Preset", list(_STYLE_PRESETS.keys()), index=0)
-    st.caption(
-        {
-            "Minimalist Dark": "Clean black-and-white. No distractions.",
-            "Classic Blackboard": "Hand-drawn chalk aesthetic on dark green.",
-            "Futuristic Tech": "Neon glows, fast cuts, holographic feel.",
-        }[style_preset]
-    )
+    style_label = st.selectbox("Preset", list(_STYLE_OPTIONS.keys()), index=0)
+    style_name = _STYLE_OPTIONS[style_label]
+    style_preset = get_style(style_name)
+    st.caption(style_preset.description)
 
     st.divider()
 
@@ -431,6 +434,13 @@ with left_col:
                         st.session_state.demo_title = ""
                 st.rerun()
 
+    # Random prompt button
+    if st.button("🎲 Random Prompt", use_container_width=True, key="random_btn"):
+        st.session_state.script_input = random.choice(_RANDOM_PROMPTS)
+        st.session_state.demo_video_path = None
+        st.session_state.demo_title = ""
+        st.rerun()
+
     # Main textarea — key binds it to session_state.script_input
     st.text_area(
         "Explanation Script",
@@ -491,14 +501,6 @@ if generate_btn:
     if not user_script:
         st.warning("Please enter an explanation script or pick a Quick Template.")
     else:
-        # Build style-injected narrative
-        narrative = user_script + _STYLE_PRESETS[style_preset]
-        description = SceneDescription(
-            title="GeneratedScene",
-            narrative=narrative,
-            complexity=SceneComplexity.MODERATE,
-        )
-
         # Set up log capture
         captured_logs: list[tuple[str, str]] = []
         log_handler = _ListHandler(captured_logs)
@@ -516,10 +518,11 @@ if generate_btn:
         pipeline_error: str | None = None
 
         try:
-            orchestrator = _build_orchestrator(
+            orchestrator = build_orchestrator(
                 model_name=model_name,
                 temperature=temperature,
                 top_p=top_p,
+                working_dir=_WORKING_DIR,
                 use_local_manim=use_local_manim,
             )
 
@@ -528,7 +531,14 @@ if generate_btn:
                 st.write("Synthesizing Script — calling Gemini LLM...")
 
                 try:
-                    pipeline_result = orchestrator.run(description)
+                    pipeline_result = generate_animation(
+                        GenerationRequest(
+                            prompt=user_script,
+                            style=style_name,
+                            complexity=SceneComplexity.MODERATE,
+                        ),
+                        orchestrator=orchestrator,
+                    )
                 except Exception as exc:
                     pipeline_error = traceback.format_exc()
                     status.update(

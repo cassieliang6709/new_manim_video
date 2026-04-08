@@ -14,3 +14,5 @@ numpy>=1.24.0
 sentence-transformers>=3.0.0
 
 # For --local execution (no Docker): pip install manim
+# Optional for mcp_server.py:
+# mcp[cli]>=1.0.0
