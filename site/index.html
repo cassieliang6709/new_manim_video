@@ -1,806 +1,423 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visocode Demo | AI to Manim Animation</title>
-  <meta
-    name="description"
-    content="Demo website for new_manim_video, an AI pipeline that turns natural language into rendered Manim videos with retrieval, auditing, sandboxed execution, and retry logic."
-  />
-  <style>
-    :root {
-      --bg: #07111f;
-      --bg-soft: #101d31;
-      --panel: rgba(10, 19, 35, 0.72);
-      --panel-strong: rgba(15, 28, 47, 0.92);
-      --ink: #edf4ff;
-      --muted: #93a6c7;
-      --line: rgba(255, 255, 255, 0.1);
-      --blue: #53a6ff;
-      --cyan: #59e1d9;
-      --amber: #ffc76b;
-      --shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
-      --radius-xl: 32px;
-      --radius-lg: 24px;
-      --radius-md: 18px;
-      --content: min(1180px, calc(100% - 32px));
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--ink);
-      font-family: "Avenir Next", "Segoe UI", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(83, 166, 255, 0.24), transparent 28%),
-        radial-gradient(circle at 85% 12%, rgba(89, 225, 217, 0.16), transparent 20%),
-        radial-gradient(circle at 50% 100%, rgba(255, 199, 107, 0.14), transparent 30%),
-        linear-gradient(180deg, #08111f 0%, #07111f 55%, #0c1830 100%);
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-      background-size: 42px 42px;
-      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 88%);
-    }
-
-    a {
-      color: inherit;
-    }
-
-    .shell {
-      width: var(--content);
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    .glass {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      backdrop-filter: blur(16px);
-      box-shadow: var(--shadow);
-    }
-
-    .nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 24px 0 10px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      text-decoration: none;
-    }
-
-    .brand-mark {
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: #03101d;
-      background: linear-gradient(135deg, var(--cyan), var(--blue));
-      box-shadow: 0 14px 30px rgba(83, 166, 255, 0.25);
-    }
-
-    .brand-copy strong,
-    .brand-copy span {
-      display: block;
-    }
-
-    .brand-copy strong {
-      font-size: 0.96rem;
-      letter-spacing: 0.08em;
-    }
-
-    .brand-copy span {
-      color: var(--muted);
-      font-size: 0.8rem;
-    }
-
-    .nav-links {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 18px;
-    }
-
-    .nav-links a {
-      text-decoration: none;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    .nav-links a:hover,
-    .nav-links a:focus-visible {
-      color: var(--ink);
-    }
-
-    .nav-cta {
-      padding: 11px 16px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      color: var(--ink) !important;
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 22px;
-      padding: 28px 0 42px;
-      align-items: stretch;
-    }
-
-    .hero-copy,
-    .hero-side,
-    .section-card,
-    .sample-card,
-    .feature-card,
-    .architecture-card,
-    .footer-card {
-      border-radius: var(--radius-xl);
-    }
-
-    .hero-copy,
-    .hero-side {
-      padding: 30px;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: var(--cyan);
-      font-size: 0.8rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    h1,
-    h2,
-    h3,
-    p {
-      margin-top: 0;
-    }
-
-    h1 {
-      margin: 18px 0 18px;
-      font-size: clamp(3rem, 7vw, 6rem);
-      line-height: 0.94;
-      letter-spacing: -0.06em;
-      max-width: 9ch;
-    }
-
-    .lead {
-      font-size: 1.08rem;
-      line-height: 1.8;
-      color: var(--muted);
-      max-width: 60ch;
-      margin-bottom: 24px;
-    }
-
-    .action-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      margin-bottom: 28px;
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      min-height: 48px;
-      padding: 13px 18px;
-      border-radius: 999px;
-      text-decoration: none;
-      font-weight: 700;
-      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-    }
-
-    .button:hover,
-    .button:focus-visible {
-      transform: translateY(-2px);
-    }
-
-    .button-primary {
-      color: #04111e;
-      background: linear-gradient(135deg, var(--cyan), #7ec8ff);
-      box-shadow: 0 14px 30px rgba(89, 225, 217, 0.22);
-    }
-
-    .button-secondary {
-      color: var(--ink);
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .hero-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-    }
-
-    .stat {
-      padding: 18px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .stat strong {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 1.25rem;
-    }
-
-    .stat span {
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 0.92rem;
-    }
-
-    .hero-side {
-      background:
-        linear-gradient(180deg, rgba(15, 28, 47, 0.96), rgba(9, 17, 31, 0.92)),
-        radial-gradient(circle at top right, rgba(83, 166, 255, 0.16), transparent 30%);
-    }
-
-    .mini-label {
-      color: var(--cyan);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-weight: 700;
-      font-size: 0.8rem;
-      margin-bottom: 14px;
-    }
-
-    .terminal {
-      border-radius: var(--radius-lg);
-      padding: 18px;
-      background: #050b14;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      font-family: "SFMono-Regular", "Menlo", monospace;
-      font-size: 0.88rem;
-      line-height: 1.8;
-      color: #d7e6ff;
-      overflow-x: auto;
-    }
-
-    .dim {
-      color: #7a8ca9;
-    }
-
-    .ok {
-      color: #86f0a8;
-    }
-
-    .warn {
-      color: #ffc76b;
-    }
-
-    .hero-side p {
-      color: var(--muted);
-      line-height: 1.8;
-      margin: 18px 0 0;
-    }
-
-    .section {
-      padding: 20px 0 30px;
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: end;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .section-head h2 {
-      margin-bottom: 0;
-      font-size: clamp(2rem, 4vw, 3.1rem);
-      letter-spacing: -0.05em;
-    }
-
-    .section-head p {
-      max-width: 54ch;
-      color: var(--muted);
-      line-height: 1.8;
-      margin-bottom: 0;
-    }
-
-    .grid-3,
-    .samples-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
-    }
-
-    .feature-card,
-    .sample-card,
-    .section-card,
-    .architecture-card,
-    .footer-card {
-      padding: 24px;
-    }
-
-    .chip {
-      display: inline-flex;
-      padding: 7px 11px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--cyan);
-      font-size: 0.76rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-
-    .feature-card h3,
-    .sample-card h3,
-    .section-card h3,
-    .architecture-card h3,
-    .footer-card h3 {
-      margin-bottom: 10px;
-      font-size: 1.2rem;
-    }
-
-    .feature-card p,
-    .sample-card p,
-    .section-card p,
-    .architecture-card p,
-    .footer-card p,
-    .bullet-list li {
-      color: var(--muted);
-      line-height: 1.75;
-    }
-
-    .architecture {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 18px;
-    }
-
-    .pipeline {
-      display: grid;
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .pipeline-step {
-      display: grid;
-      grid-template-columns: 72px 1fr;
-      gap: 16px;
-      padding: 16px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .pipeline-step strong {
-      display: block;
-      font-size: 0.92rem;
-      color: var(--cyan);
-      letter-spacing: 0.03em;
-      margin-bottom: 6px;
-    }
-
-    .pipeline-step span {
-      display: inline-grid;
-      place-items: center;
-      width: 56px;
-      height: 56px;
-      border-radius: 16px;
-      font-weight: 800;
-      color: #04111e;
-      background: linear-gradient(135deg, var(--cyan), var(--blue));
-      box-shadow: 0 10px 24px rgba(83, 166, 255, 0.18);
-    }
-
-    .bullet-list {
-      margin: 0;
-      padding-left: 18px;
-    }
-
-    .bullet-list li + li {
-      margin-top: 8px;
-    }
-
-    .sample-card video {
-      width: 100%;
-      display: block;
-      aspect-ratio: 16 / 9;
-      object-fit: cover;
-      border-radius: 16px;
-      background: #02070f;
-      margin-bottom: 14px;
-    }
-
-    .sample-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .sample-meta span {
-      display: inline-flex;
-      align-items: center;
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      font-size: 0.76rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .cta {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
-    }
-
-    .footer {
-      padding: 10px 0 46px;
-    }
-
-    .footer-card {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-      background: var(--panel-strong);
-    }
-
-    .footer-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .reveal {
-      opacity: 0;
-      transform: translateY(22px);
-      animation: rise 720ms ease forwards;
-    }
-
-    .delay-1 {
-      animation-delay: 80ms;
-    }
-
-    .delay-2 {
-      animation-delay: 180ms;
-    }
-
-    .delay-3 {
-      animation-delay: 280ms;
-    }
-
-    @keyframes rise {
-      to {
-        opacity: 1;
-        transform: translateY(0);
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Visocode | Editorial Case Study</title>
+    <meta
+      name="description"
+      content="Editorial case study for new_manim_video, an AI pipeline that turns natural language prompts into rendered Manim videos."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap"
+      rel="stylesheet"
+    >
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    >
+    <style>
+      :root {
+        --pico-font-family: "IBM Plex Sans", sans-serif;
+        --pico-font-size: 106%;
+        --pico-line-height: 1.75;
+        --pico-border-radius: 0.9rem;
+        --pico-background-color: #f4f0e8;
+        --pico-color: #20201d;
+        --pico-muted-color: #646158;
+        --pico-muted-border-color: #d8d0c2;
+        --pico-primary: #222a44;
+        --pico-primary-hover: #111827;
+        --pico-primary-focus: rgba(34, 42, 68, 0.18);
+        --pico-primary-inverse: #f8f4ec;
+        --paper: #fbf8f2;
+        --ink-soft: #555247;
+        --rule: #d7d0c4;
+        --accent: #b44f2f;
+        --max-width: 46rem;
       }
-    }
 
-    @media (max-width: 1024px) {
-      .hero,
-      .architecture,
-      .cta,
-      .grid-3,
-      .samples-grid,
-      .hero-stats {
-        grid-template-columns: 1fr;
+      body {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.56)),
+          var(--pico-background-color);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(rgba(32, 32, 29, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(32, 32, 29, 0.03) 1px, transparent 1px);
+        background-size: 34px 34px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.14), transparent 82%);
+      }
+
+      main.container {
+        max-width: var(--max-width);
+        padding-top: 2rem;
+        padding-bottom: 5rem;
+        position: relative;
+      }
+
+      header.topline {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 5rem;
+        font-size: 0.92rem;
+        color: var(--ink-soft);
+      }
+
+      header.topline nav {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: "Newsreader", serif;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: #181714;
       }
 
       h1 {
-        max-width: none;
-      }
-    }
-
-    @media (max-width: 760px) {
-      .nav,
-      .footer-card {
-        flex-direction: column;
-        align-items: start;
+        font-size: clamp(3rem, 10vw, 5.9rem);
+        line-height: 0.95;
+        max-width: 9ch;
+        margin-bottom: 1.25rem;
       }
 
-      .hero-copy,
-      .hero-side,
-      .feature-card,
-      .sample-card,
-      .section-card,
-      .architecture-card,
-      .footer-card {
-        padding: 22px;
+      h2 {
+        font-size: clamp(2rem, 6vw, 2.9rem);
+        margin-top: 0;
       }
 
-      .shell {
-        width: min(100% - 20px, 1180px);
+      p.lead {
+        font-size: 1.15rem;
+        color: var(--ink-soft);
+        max-width: 42rem;
       }
-    }
-  </style>
-</head>
-<body>
-  <div class="shell">
-    <nav class="nav reveal">
-      <a class="brand" href="#top">
-        <div class="brand-mark">V</div>
-        <div class="brand-copy">
-          <strong>VISOCODE</strong>
-          <span>new_manim_video demo website</span>
-        </div>
-      </a>
-      <div class="nav-links">
-        <a href="#demo">Demo</a>
-        <a href="#features">Features</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#samples">Samples</a>
-        <a class="nav-cta" href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">Open GitHub</a>
-      </div>
-    </nav>
 
-    <section class="hero" id="top">
-      <div class="hero-copy glass reveal delay-1">
-        <div class="eyebrow">AI Animation System Demo</div>
-        <h1>From plain English to rendered Manim video.</h1>
+      .eyebrow,
+      .section-label {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 0.9rem;
+        flex-wrap: wrap;
+        margin-top: 1.8rem;
+        margin-bottom: 2rem;
+      }
+
+      .hero-actions a,
+      .repo-link {
+        text-decoration: none;
+      }
+
+      .hero-note {
+        border-left: 2px solid var(--rule);
+        padding-left: 1rem;
+        color: var(--ink-soft);
+        max-width: 35rem;
+        margin-top: 2rem;
+      }
+
+      section {
+        margin-top: 5rem;
+      }
+
+      section p,
+      section li {
+        color: var(--ink-soft);
+      }
+
+      .section-intro {
+        margin-bottom: 1.4rem;
+      }
+
+      .video-frame,
+      .pull-quote,
+      .sample-grid article,
+      .meta-block {
+        background: rgba(251, 248, 242, 0.86);
+        border: 1px solid var(--rule);
+      }
+
+      .video-frame {
+        padding: 0.9rem;
+        margin: 2rem 0 0;
+      }
+
+      .video-frame video,
+      .sample-grid video {
+        width: 100%;
+        display: block;
+        background: #0f1116;
+      }
+
+      .video-frame figcaption,
+      .sample-grid figcaption {
+        margin-top: 0.9rem;
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+
+      .pull-quote {
+        padding: 1.3rem 1.4rem;
+        margin: 2rem 0;
+        font-size: 1.05rem;
+        color: #2a2925;
+      }
+
+      .pull-quote strong {
+        color: #181714;
+      }
+
+      .two-up {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1.4rem;
+      }
+
+      .two-up > div,
+      .meta-block {
+        padding: 1.1rem 1.2rem;
+      }
+
+      .meta-block h3,
+      .two-up h3 {
+        font-size: 1.25rem;
+        margin-bottom: 0.6rem;
+      }
+
+      .sample-grid {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.8rem;
+      }
+
+      .sample-grid article {
+        padding: 0.9rem;
+      }
+
+      .sample-grid h3 {
+        margin-top: 0.9rem;
+        margin-bottom: 0.35rem;
+      }
+
+      .sample-grid p {
+        margin-bottom: 0.5rem;
+      }
+
+      .sample-grid a,
+      footer a,
+      header a {
+        color: #1d2b45;
+      }
+
+      .rule {
+        margin: 4rem 0;
+        border: 0;
+        border-top: 1px solid var(--rule);
+      }
+
+      footer {
+        margin-top: 5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--rule);
+        color: var(--ink-soft);
+      }
+
+      @media (max-width: 720px) {
+        header.topline,
+        .two-up {
+          grid-template-columns: 1fr;
+          display: grid;
+        }
+
+        header.topline {
+          margin-bottom: 3.5rem;
+        }
+
+        h1 {
+          max-width: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <header class="topline">
+        <div>Visocode / new_manim_video</div>
+        <nav>
+          <a href="#story">Story</a>
+          <a href="#system">System</a>
+          <a href="#samples">Samples</a>
+          <a href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </header>
+
+      <section aria-labelledby="title">
+        <div class="eyebrow">Editorial Case Study</div>
+        <h1 id="title">From plain English to rendered animation.</h1>
         <p class="lead">
-          `new_manim_video` is an AI pipeline that turns natural-language prompts into math and CS animations. It does not stop at generated code: it retrieves context, audits the output, runs rendering inside a sandbox, retries after failure, and returns a real video artifact.
+          <code>new_manim_video</code> is an AI system that turns natural-language prompts into real Manim videos. The hard part was not generating code. The hard part was making the system survive ambiguity, failed renders, unsafe generations, and broken APIs long enough to ship an actual media artifact.
         </p>
-        <div class="action-row">
-          <a class="button button-primary" href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">View GitHub Repo</a>
-          <a class="button button-secondary" href="#samples">Watch Samples</a>
+        <div class="hero-actions">
+          <a href="https://github.com/cassieliang6709/new_manim_video" role="button" target="_blank" rel="noreferrer">Open Repository</a>
+          <a href="#samples" role="button" class="secondary">Watch Sample Outputs</a>
         </div>
-        <div class="hero-stats">
-          <div class="stat">
-            <strong>NL to Video</strong>
-            <span>Accepts open-ended prompts and converts them into executable Manim scenes.</span>
-          </div>
-          <div class="stat">
-            <strong>Failure Aware</strong>
-            <span>Handles bad generations with audit gates, retries, API lookup, and safe fallback.</span>
-          </div>
-          <div class="stat">
-            <strong>Portfolio Ready</strong>
-            <span>Shows real output videos, system design, and repository entry points on one page.</span>
-          </div>
-        </div>
-      </div>
-
-      <aside class="hero-side glass reveal delay-2" id="demo">
-        <div class="mini-label">One request, multiple stages</div>
-        <div class="terminal">
-          <div><span class="dim">$</span> "Visualize bubble sort step by step"</div>
-          <div><span class="dim">[retrieve]</span> successful examples + API hints</div>
-          <div><span class="dim">[generate]</span> draft Manim scene code</div>
-          <div><span class="dim">[audit]</span> AST security + semantic review <span class="ok">PASS</span></div>
-          <div><span class="dim">[execute]</span> render inside Docker sandbox</div>
-          <div><span class="dim">[debug]</span> compress traceback when render fails</div>
-          <div><span class="dim">[retry]</span> regenerate with targeted feedback</div>
-          <div><span class="warn">result:</span> playable MP4 + shareable output</div>
-        </div>
-        <p>
-          This demo site is intentionally simple to deploy: one static HTML page, local sample videos, and a clear jump to the source repository. It works well for GitHub Pages, Vercel, or portfolio linking.
+        <p class="hero-note">
+          This page is intentionally quiet. It is not a startup landing page. It is a compact project document for showing what the system does, why the engineering was hard, and what the outputs actually look like.
         </p>
-      </aside>
-    </section>
 
-    <section class="section" id="features">
-      <div class="section-head reveal">
-        <h2>Why this project matters</h2>
-        <p>
-          The interesting part is not just prompting an LLM. The project is about making an unreliable generation loop behave like an actual system that can ship outputs.
-        </p>
-      </div>
-      <div class="grid-3">
-        <article class="feature-card glass reveal delay-1">
-          <div class="chip">Challenge</div>
-          <h3>Prompts are vague</h3>
-          <p>
-            Users describe intent in natural language, but Manim needs exact scene structure, timing, positioning, and API-correct animation logic.
-          </p>
-        </article>
-        <article class="feature-card glass reveal delay-2">
-          <div class="chip">Engineering</div>
-          <h3>Execution is the truth</h3>
-          <p>
-            A generated scene only counts if it survives auditing, runs in isolation, and renders an output video instead of crashing with a traceback.
-          </p>
-        </article>
-        <article class="feature-card glass reveal delay-3">
-          <div class="chip">Outcome</div>
-          <h3>Reliable demo loop</h3>
-          <p>
-            The system combines retrieval, sandboxing, targeted debugging, and bounded retries so the final user experience is stronger than a single-shot prompt.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section" id="architecture">
-      <div class="section-head reveal">
-        <h2>System architecture</h2>
-        <p>
-          The repo is structured as a workflow engine with separate responsibilities for generation, review, execution, retrieval, and output delivery.
-        </p>
-      </div>
-      <div class="architecture">
-        <article class="architecture-card glass reveal delay-1">
-          <div class="chip">Pipeline</div>
-          <h3>Multi-step generation flow</h3>
-          <div class="pipeline">
-            <div class="pipeline-step">
-              <span>01</span>
-              <div>
-                <strong>Retrieve</strong>
-                Pull similar successful runs and targeted Manim API references to ground the next generation.
-              </div>
-            </div>
-            <div class="pipeline-step">
-              <span>02</span>
-              <div>
-                <strong>Generate</strong>
-                Use an LLM to write scene code from the prompt, style, and recovered context.
-              </div>
-            </div>
-            <div class="pipeline-step">
-              <span>03</span>
-              <div>
-                <strong>Audit</strong>
-                Run AST security checks and semantic review before any rendering happens.
-              </div>
-            </div>
-            <div class="pipeline-step">
-              <span>04</span>
-              <div>
-                <strong>Execute</strong>
-                Render inside Docker so unsafe or broken code stays contained.
-              </div>
-            </div>
-            <div class="pipeline-step">
-              <span>05</span>
-              <div>
-                <strong>Recover</strong>
-                Compress errors, inject better hints, retry generation, and fall back safely when needed.
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="section-card glass reveal delay-2">
-          <div class="chip">Tech Stack</div>
-          <h3>Core building blocks</h3>
-          <ul class="bullet-list">
-            <li>Python application layer with reusable service entry points.</li>
-            <li>LangGraph orchestration for multi-stage execution and retry routing.</li>
-            <li>Gemini models for generation, judging, and diagnosis.</li>
-            <li>Docker sandbox for rendering Manim scenes in isolation.</li>
-            <li>Sentence Transformers retrieval over prior successful runs.</li>
-            <li>Optional Google Drive upload and MCP integration.</li>
-          </ul>
-          <p>
-            The full implementation lives in the repository, including `app.py`, `service_api.py`, `orchestrator.py`, `executor.py`, and the template library used for sample scenes.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section" id="samples">
-      <div class="section-head reveal">
-        <h2>Sample outputs</h2>
-        <p>
-          These videos are published from the local repo so the website shows real artifacts, not placeholder screenshots.
-        </p>
-      </div>
-      <div class="samples-grid">
-        <article class="sample-card glass reveal delay-1">
+        <figure class="video-frame">
           <video controls preload="metadata" src="./videos/bubble_sort.mp4"></video>
-          <div class="sample-meta">
-            <span>Bubble Sort</span>
-            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/cs" target="_blank" rel="noreferrer">template source</a>
-          </div>
-          <h3>Algorithm visualization</h3>
-          <p>
-            Turns comparisons and swaps into motion so a standard sorting routine becomes a readable visual explanation.
-          </p>
-        </article>
+          <figcaption>
+            One sample output: bubble sort rendered as a short explanatory animation instead of a static code listing.
+          </figcaption>
+        </figure>
+      </section>
 
-        <article class="sample-card glass reveal delay-2">
-          <video controls preload="metadata" src="./videos/fourier_series.mp4"></video>
-          <div class="sample-meta">
-            <span>Fourier Series</span>
-            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/calculus" target="_blank" rel="noreferrer">template source</a>
-          </div>
-          <h3>Math concept animation</h3>
-          <p>
-            Shows harmonics accumulating over time, which makes convergence visible instead of leaving it as a symbolic equation.
-          </p>
-        </article>
+      <section id="story" aria-labelledby="story-title">
+        <div class="section-label">Story</div>
+        <h2 id="story-title">What I was trying to build</h2>
+        <p class="section-intro">
+          Most LLM demos stop at generated code. This project goes one step further: the code needs to execute, render, and produce a usable video file. That changes the problem completely. Prompt quality still matters, but orchestration, auditing, sandboxing, and recovery matter more.
+        </p>
+        <p>
+          A user can ask for something vague like “show the Fourier series approximation of a square wave” or “visualize gradient descent.” Those prompts encode intent, not implementation. The system has to infer scene structure, choose APIs, avoid unsafe code, handle render errors, and keep retrying with better context instead of collapsing after the first failure.
+        </p>
+        <aside class="pull-quote">
+          <strong>The goal was not:</strong> get a nice-looking code snippet from a model.<br>
+          <strong>The goal was:</strong> return a playable MP4, even when the first attempt was wrong.
+        </aside>
+      </section>
 
-        <article class="sample-card glass reveal delay-3">
-          <video controls preload="metadata" src="./videos/gradient_descent.mp4"></video>
-          <div class="sample-meta">
-            <span>Gradient Descent</span>
-            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/algebra" target="_blank" rel="noreferrer">template source</a>
+      <section id="system" aria-labelledby="system-title">
+        <div class="section-label">System</div>
+        <h2 id="system-title">How the pipeline works</h2>
+        <p class="section-intro">
+          The repo is organized as a workflow, not a single prompt call. Each stage has a narrow job, and each one exists because the failure modes are different.
+        </p>
+        <div class="two-up">
+          <div class="meta-block">
+            <h3>Before rendering</h3>
+            <p>
+              The system retrieves useful examples from prior successful runs, generates Manim code with an LLM, then checks that code with both AST-based security rules and semantic review.
+            </p>
           </div>
-          <h3>Optimization intuition</h3>
-          <p>
-            Visualizes update steps on the loss surface so optimization behavior is easier to explain in a classroom or portfolio setting.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="cta">
-        <article class="section-card glass reveal delay-1">
-          <div class="chip">Use Case</div>
-          <h3>Good fit for a portfolio demo</h3>
-          <p>
-            This page is built as a lightweight static landing page rather than a full app shell. That keeps deployment easy while still showing the project story, sample outputs, and the engineering depth behind the repo.
-          </p>
-        </article>
-        <article class="section-card glass reveal delay-2">
-          <div class="chip">Repository</div>
-          <h3>Jump into the codebase</h3>
-          <p>
-            Want the implementation details, setup steps, or architecture docs? The GitHub repo is the canonical source for the pipeline, templates, tests, deployment config, and presentation assets.
-          </p>
-          <div class="action-row">
-            <a class="button button-primary" href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">Open Repository</a>
+          <div class="meta-block">
+            <h3>After failure</h3>
+            <p>
+              If rendering breaks, the traceback is compressed into a smaller signal, relevant API hints are injected, and the next generation attempt is more targeted rather than purely random.
+            </p>
           </div>
-        </article>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <div class="footer-card glass reveal">
-        <div>
-          <h3>Visocode / new_manim_video</h3>
-          <p>
-            Static demo website for the GitHub project at
-            <a href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">github.com/cassieliang6709/new_manim_video</a>.
-          </p>
         </div>
-        <div class="footer-actions">
-          <a class="button button-secondary" href="#top">Back to top</a>
-          <a class="button button-primary" href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer">GitHub</a>
+        <div class="two-up">
+          <div class="meta-block">
+            <h3>Execution boundary</h3>
+            <p>
+              Rendering runs inside Docker so generated code is constrained. That matters because this system executes model-written code, not just text.
+            </p>
+          </div>
+          <div class="meta-block">
+            <h3>Fallback behavior</h3>
+            <p>
+              Retries are bounded. If the main loop cannot recover, the pipeline still aims to produce a safe fallback scene rather than leaving the user with an empty failure.
+            </p>
+          </div>
         </div>
-      </div>
-    </footer>
-  </div>
-</body>
+      </section>
+
+      <section aria-labelledby="stack-title">
+        <div class="section-label">Stack</div>
+        <h2 id="stack-title">The main ingredients</h2>
+        <p class="section-intro">
+          The implementation combines several small systems that each solve a specific problem in the loop:
+        </p>
+        <ul>
+          <li>Python service layer for the app, orchestration, and reusable entry points.</li>
+          <li>LangGraph for multi-stage workflow routing and retry logic.</li>
+          <li>Gemini models for generation, diagnosis, and judging.</li>
+          <li>Docker for isolated Manim rendering.</li>
+          <li>Sentence Transformers retrieval over past successful runs.</li>
+          <li>Optional Google Drive upload and MCP interface for integration.</li>
+        </ul>
+        <p>
+          The source code and run paths live in the repository, especially <code>app.py</code>, <code>service_api.py</code>, <code>orchestrator.py</code>, <code>executor.py</code>, and the template library under <code>animation_templates/</code>.
+        </p>
+      </section>
+
+      <section id="samples" aria-labelledby="samples-title">
+        <div class="section-label">Samples</div>
+        <h2 id="samples-title">A few concrete outputs</h2>
+        <p class="section-intro">
+          These are local assets from the repo, published directly in the site so the project can be evaluated by actual output quality rather than abstract claims.
+        </p>
+        <div class="sample-grid">
+          <article>
+            <video controls preload="metadata" src="./videos/fourier_series.mp4"></video>
+            <h3>Fourier series</h3>
+            <p>
+              A convergence story made visual: harmonics accumulate over time and the square wave emerges from motion instead of static notation.
+            </p>
+            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/calculus" target="_blank" rel="noreferrer">See the calculus templates</a>
+          </article>
+          <article>
+            <video controls preload="metadata" src="./videos/gradient_descent.mp4"></video>
+            <h3>Gradient descent</h3>
+            <p>
+              This example is useful because it turns optimization into something spatial and readable. You can see the update path rather than only reading equations.
+            </p>
+            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/algebra" target="_blank" rel="noreferrer">See the algebra templates</a>
+          </article>
+          <article>
+            <video controls preload="metadata" src="./videos/pythagorean.mp4"></video>
+            <h3>Pythagorean theorem</h3>
+            <p>
+              A more classical teaching example. It shows that the same pipeline can support proof-oriented visual explanations, not only algorithm animations.
+            </p>
+            <a href="https://github.com/cassieliang6709/new_manim_video/tree/main/animation_templates/geometry" target="_blank" rel="noreferrer">See the geometry templates</a>
+          </article>
+        </div>
+      </section>
+
+      <hr class="rule">
+
+      <section aria-labelledby="repo-title">
+        <div class="section-label">Repository</div>
+        <h2 id="repo-title">If you want to read the code</h2>
+        <p>
+          The GitHub repository is the canonical source for the app, orchestration logic, templates, tests, deployment configuration, and the broader architecture notes behind this project.
+        </p>
+        <p>
+          <a class="repo-link" href="https://github.com/cassieliang6709/new_manim_video" target="_blank" rel="noreferrer"><strong>github.com/cassieliang6709/new_manim_video</strong></a>
+        </p>
+      </section>
+
+      <footer>
+        <p>
+          Built as a lightweight GitHub Pages case study with Pico CSS as the base layer and a custom editorial layout on top.
+        </p>
+      </footer>
+    </main>
+  </body>
 </html>
